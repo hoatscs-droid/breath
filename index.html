@@ -36,7 +36,8 @@
   .orbwrap{flex:1;position:relative;display:flex;align-items:center;justify-content:center;z-index:2}
   .orb{position:relative;width:min(52vw,248px);aspect-ratio:1;border-radius:50%;transform:scale(.6);will-change:transform;background:radial-gradient(circle at 36% 32%, var(--core) 0%, var(--body) 42%, var(--rim) 82%, #05030f 100%);box-shadow:inset -12px -16px 40px rgba(0,0,0,.5), inset 9px 11px 26px rgba(255,255,255,.12)}
   .orb::before{content:"";position:absolute;inset:-28%;border-radius:50%;z-index:-1;background:radial-gradient(circle,var(--glow) 0%,transparent 60%);opacity:.4;filter:blur(8px)}
-  .orb::after{content:"";position:absolute;inset:9%;border-radius:50%;background:radial-gradient(circle at 60% 70%, rgba(255,255,255,.16), transparent 55%);animation:drift 12s var(--ease) infinite alternate}
+  .orb::after{content:"";position:absolute;inset:9%;border-radius:50%;background:radial-gradient(circle at 60% 70%, rgba(255,255,255,.16), transparent 55%);animation:drift 12s var(--ease) infinite alternate;animation-play-state:paused}
+  #stage.running .orb::after{animation-play-state:running}
   @keyframes drift{from{transform:translate(-3%,-2%) scale(1)}to{transform:translate(4%,3%) scale(1.05)}}
 
   .cue{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;z-index:2;pointer-events:none}
@@ -64,12 +65,13 @@
   .dur button{min-width:42px;padding:7px 0;border:1px solid var(--hair);border-radius:9px;background:transparent;color:rgba(232,234,255,.6);font-size:13px;cursor:pointer;transition:all .3s var(--ease);font-variant-numeric:tabular-nums}
   .dur button[aria-pressed="true"]{color:#0c0f1b;background:var(--body);border-color:transparent;font-weight:600}
   .inf{font-size:16px;line-height:1}
-  .settings{display:grid;grid-template-columns:1fr;gap:8px;margin:-4px 0 14px}
-  .setting{display:flex;align-items:center;justify-content:center;gap:10px;min-height:32px}
+  .settings{display:grid;gap:14px}
+  .setting{display:flex;align-items:center;justify-content:space-between;gap:14px;min-height:38px}
+  .setting .lab{font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:rgba(232,234,255,.42)}
   .seg{display:flex;gap:6px}
   .seg button{min-width:40px;padding:7px 9px;border:1px solid var(--hair);border-radius:9px;background:transparent;color:rgba(232,234,255,.6);font-size:11px;line-height:1;cursor:pointer;transition:all .3s var(--ease);font-weight:600}
   .seg button[aria-pressed="true"]{color:#0c0f1b;background:var(--body);border-color:transparent}
-  .ambient-note{display:none;margin:-4px auto 12px;max-width:286px;text-align:center;font-size:10.5px;line-height:1.35;color:rgba(232,234,255,.32);font-style:italic}
+  .ambient-note{display:none;margin:4px 0 0;max-width:286px;font-size:10.5px;line-height:1.35;color:rgba(232,234,255,.38);font-style:italic}
   .ambient-note.on{display:block}
   .begin{width:100%;padding:16px;border:none;border-radius:14px;cursor:pointer;font-size:13px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:#0c0f1b;background:var(--body);box-shadow:0 14px 36px -14px var(--glow);transition:transform .2s var(--ease)}
   .begin:active{transform:scale(.985)}
@@ -93,6 +95,12 @@
   .gate .acts{display:flex;gap:10px}
   .gate .acts button{flex:1;padding:13px;border-radius:11px;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border:1px solid var(--hair);background:transparent;color:rgba(232,234,255,.7)}
   .gate .acts .go{border:none;color:#0c0f1b;background:var(--body)}
+  .sheet{position:absolute;inset:0;z-index:8;display:none;align-items:flex-end;justify-content:center;background:rgba(5,3,15,.58);backdrop-filter:blur(5px);padding:0 18px calc(18px + env(safe-area-inset-bottom))}
+  .sheet.on{display:flex}
+  .sheet-card{width:100%;max-width:360px;border:1px solid var(--hair);border-radius:14px;background:rgba(8,8,20,.86);box-shadow:0 28px 70px rgba(0,0,0,.42);padding:18px}
+  .sheet-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+  .sheet-title{font-family:"Iowan Old Style",Palatino,Georgia,serif;font-size:19px;color:var(--text)}
+  .sheet-close{width:34px;height:34px;border-radius:50%;border:1px solid var(--hair);background:transparent;color:rgba(232,234,255,.7);font-size:18px;line-height:1;cursor:pointer}
 
   @media (prefers-reduced-motion: reduce){.orb::after{animation:none}}
 </style>
@@ -107,6 +115,7 @@
   <div class="toggles">
     <button class="tg" id="soundTg" aria-pressed="true" aria-label="Sound" title="Sound">♪</button>
     <button class="tg" id="hapticTg" aria-pressed="false" aria-label="Haptics" title="Haptics">⊚</button>
+    <button class="tg" id="settingsTg" aria-label="Settings" title="Settings">⚙</button>
   </div>
 
   <div class="orbwrap"><div class="orb" id="orb"></div><div class="cue"><div class="word" id="word">ready</div><div class="count" id="count"></div><div class="hint" id="hint"></div></div></div>
@@ -120,12 +129,18 @@
     <div class="tabs" id="tabs" role="tablist"></div>
     <div class="chips" id="chips"></div>
     <div class="row"><span class="lab">Length</span><div class="dur" id="dur"></div></div>
-    <div class="settings">
-      <div class="setting"><span class="lab">Ambient</span><div class="seg" id="ambient"></div></div>
-      <div class="setting"><span class="lab">Visuals</span><div class="seg" id="visuals"></div></div>
-    </div>
-    <div class="ambient-note" id="ambientNote">Off may keep a near-silent iPhone lock-screen anchor.</div>
     <button class="begin" id="begin">Begin</button>
+  </div>
+
+  <div class="sheet" id="settingsSheet" aria-hidden="true">
+    <div class="sheet-card" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <div class="sheet-head"><div class="sheet-title" id="settingsTitle">Settings</div><button class="sheet-close" id="settingsClose" aria-label="Close settings">×</button></div>
+      <div class="settings">
+        <div class="setting"><span class="lab">Ambience</span><div class="seg" id="ambient"></div></div>
+        <div class="setting"><span class="lab">Visuals</span><div class="seg" id="visuals"></div></div>
+      </div>
+      <div class="ambient-note" id="ambientNote">Off may keep a near-silent iPhone lock-screen anchor.</div>
+    </div>
   </div>
 
   <div class="gate" id="gate">
@@ -381,7 +396,7 @@ function computeOpen(now){
     $("count").textContent=dur>=2?Math.max(1,Math.ceil(dur-el)):"";
     return lo+(hi-lo)*o;
   }else if(paused){return breathOpen;}
-  else{idleT+=(now-lastNow)/1000;const period=8;const o=0.5-0.5*Math.cos(2*Math.PI*(idleT%period)/period);return 0.58+(0.9-0.58)*o;}
+  else{return 0.74;}
 }
 let rafId=0,lastMedia=0;
 function samplePerformance(now){
@@ -465,6 +480,12 @@ $("gateBack").onclick=()=>$("gate").classList.remove("on");
 $("pauseBtn").onclick=togglePause;$("endBtn").onclick=end;
 $("soundTg").onclick=()=>{soundOn=!soundOn;writeStore(STORE.sound,String(soundOn));$("soundTg").setAttribute("aria-pressed",soundOn);audioResume();setCueBus();updateAmbientBed();if(soundOn){audioScheduleUntil=performance.now();scheduleAudioAhead();}else stopTrackedAudio();};
 $("hapticTg").onclick=()=>{hapticOn=!hapticOn;$("hapticTg").setAttribute("aria-pressed",hapticOn);if(hapticOn)vibe(20);};
+function openSettings(){$("settingsSheet").classList.add("on");$("settingsSheet").setAttribute("aria-hidden","false");}
+function closeSettings(){$("settingsSheet").classList.remove("on");$("settingsSheet").setAttribute("aria-hidden","true");}
+$("settingsTg").onclick=openSettings;
+$("settingsClose").onclick=closeSettings;
+$("settingsSheet").addEventListener("click",e=>{if(e.target===$("settingsSheet"))closeSettings();});
+addEventListener("keydown",e=>{if(e.key==="Escape")closeSettings();});
 $("orb").parentElement.addEventListener("click",()=>{if(running)stage.classList.toggle("dim");});
 
 $("soundTg").setAttribute("aria-pressed",soundOn);
