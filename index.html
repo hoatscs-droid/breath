@@ -202,10 +202,13 @@ let cat="calm",pat=CATS.calm.patterns[0],durMin=5;
 let running=false,paused=false,safetyOK=false;
 let phases=[],pIdx=0,pStart=0,sessStart=0,pauseAt=0;
 let breathOpen=0,prevOpen=0,prevDir=0,idleT=0,lastNow=0;
+const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
 let audioScheduleUntil=0,bgTimer=0,wakeLock=null,lastFrameSample=0,slowFrameMs=0,visualAutoQuietUntil=0;
 let soundOn=readBool(STORE.sound,true),hapticOn=supportsHaptics()?readBool(STORE.haptic,false):false,ambientOn=readBool(STORE.ambient,true);
-let visualMode=VISUAL_MODES.includes(readStore(STORE.visual,"full"))?readStore(STORE.visual,"full"):"full";
-const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+const _storedVisual=readStore(STORE.visual,null),_visualWasAuto=readBool(STORE.autoVisual,false);
+const _discardAutoVisual=_visualWasAuto&&_storedVisual==="minimal";
+let visualMode=(_storedVisual&&VISUAL_MODES.includes(_storedVisual)&&!_discardAutoVisual)?_storedVisual:"full";
+if(_visualWasAuto){writeStore(STORE.autoVisual,"false");if(_discardAutoVisual)writeStore(STORE.visual,visualMode);}
 const iOSish=/iP(ad|hone|od)/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
 const needsPlaybackFloor=()=>running&&!paused&&(iOSish||!!navigator.audioSession);
 
@@ -224,7 +227,7 @@ function buildChips(){const c=$("chips");c.innerHTML="";CATS[cat].patterns.forEa
 function buildDur(){const d=$("dur");d.innerHTML="";DURS.forEach(v=>{const b=document.createElement("button");if(v==="inf")b.innerHTML='<span class="inf">∞</span>';else b.textContent=v;b.setAttribute("aria-pressed",(v==="inf"&&durMin==="inf")||v===durMin);b.onclick=()=>{durMin=v;buildDur();};d.appendChild(b);});}
 function syncAmbientNote(){const n=$("ambientNote");if(n)n.classList.toggle("on",!ambientOn&&needsPlaybackFloor());}
 function buildAmbient(){const a=$("ambient");a.innerHTML="";["on","off"].forEach(v=>{const b=document.createElement("button");b.textContent=v==="on"?"On":"Off";b.setAttribute("aria-pressed",(v==="on")===ambientOn);b.onclick=()=>{ambientOn=v==="on";writeStore(STORE.ambient,String(ambientOn));buildAmbient();updateAmbientBed();};a.appendChild(b);});syncAmbientNote();}
-function setVisualMode(mode,auto){if(!VISUAL_MODES.includes(mode))mode="full";visualMode=mode;stage.dataset.visual=mode;writeStore(STORE.visual,mode);if(auto)writeStore(STORE.autoVisual,"true");buildVisuals();}
+function setVisualMode(mode,auto){if(!VISUAL_MODES.includes(mode))mode="full";visualMode=mode;stage.dataset.visual=mode;if(auto){writeStore(STORE.autoVisual,"true");}else{writeStore(STORE.visual,mode);writeStore(STORE.autoVisual,"false");}buildVisuals();}
 function buildVisuals(){stage.dataset.visual=visualMode;const v=$("visuals");v.innerHTML="";[{id:"full",label:"Full"},{id:"minimal",label:"Min"},{id:"off",label:"Off"}].forEach(opt=>{const b=document.createElement("button");b.textContent=opt.label;b.setAttribute("aria-pressed",opt.id===visualMode);b.onclick=()=>{writeStore(STORE.autoVisual,"false");visualAutoQuietUntil=performance.now()+60000;setVisualMode(opt.id,false);};v.appendChild(b);});}
 function setPname(){$("pname").innerHTML='<b>'+pat.n+'</b> &nbsp;·&nbsp; '+pat.d;}
 
@@ -232,7 +235,7 @@ function setPname(){$("pname").innerHTML='<b>'+pat.n+'</b> &nbsp;·&nbsp; '+pat.
 let actx=null,master=null,cueBus=null,mediaDest=null,directOut=false,_noise=null,_keepAliveWav=null,ambient=null;
 const trackedSources=new Set();
 const AMBIENT_FLOOR=0.001;
-const AUDIO_SCHEDULE_AHEAD=120000;
+const AUDIO_SCHEDULE_AHEAD=25000;
 const AMBIENT={
   calm:{freq:[98,146.83,196],filter:620,gain:0.024,lfo:0.045,depth:80},
   intimacy:{freq:[123.47,185,246.94],filter:760,gain:0.022,lfo:0.038,depth:95},
@@ -339,10 +342,10 @@ function updateHapticControl(){
   const b=$("hapticTg");if(!b)return;
   const ok=supportsHaptics();
   if(!ok)hapticOn=false;
-  b.hidden=!ok;b.disabled=!ok;
+  b.hidden=false;b.disabled=!ok;
   b.setAttribute("aria-pressed",String(ok&&hapticOn));
-  b.setAttribute("aria-label",ok?"Haptics":"Haptics unavailable");
-  b.title=ok?(hapticOn?"Haptics on":"Haptics"):"Haptics unavailable";
+  b.setAttribute("aria-label",ok?"Haptics":"Haptics unavailable on this device");
+  b.title=ok?(hapticOn?"Haptics on":"Haptics"):"Haptics unavailable on this device";
 }
 function setHaptics(on){
   if(!supportsHaptics()){hapticOn=false;writeStore(STORE.haptic,"false");updateHapticControl();return;}
@@ -417,15 +420,15 @@ function computeOpen(now){
     $("count").textContent=dur>=2?Math.max(1,Math.ceil(dur-el)):"";
     return lo+(hi-lo)*o;
   }else if(paused){return breathOpen;}
-  else{return 0.74;}
+  else{idleT+=Math.min(0.05,(now-(lastNow||now))/1000);const p=9;return 0.62+0.16*(0.5-0.5*Math.cos(2*Math.PI*(idleT%p)/p));}
 }
 let rafId=0,lastMedia=0;
 function samplePerformance(now){
   if(!lastFrameSample){lastFrameSample=now;return;}
   const dt=now-lastFrameSample;lastFrameSample=now;
-  if(visualMode!=="full"||reduce||document.hidden||now<visualAutoQuietUntil){slowFrameMs=0;return;}
-  slowFrameMs=dt>20?slowFrameMs+dt:Math.max(0,slowFrameMs-dt*.7);
-  if(slowFrameMs>4500){slowFrameMs=0;visualAutoQuietUntil=now+60000;setVisualMode("minimal",true);}
+  if(visualMode!=="full"||document.hidden||now<visualAutoQuietUntil){slowFrameMs=0;return;}
+  slowFrameMs=dt>32?slowFrameMs+dt:Math.max(0,slowFrameMs-dt*.7);
+  if(slowFrameMs>9000){slowFrameMs=0;visualAutoQuietUntil=now+60000;setVisualMode("minimal",true);}
 }
 function frame(now){
   if(!lastNow)lastNow=now;
@@ -440,7 +443,7 @@ function frame(now){
 function startBackgroundTicker(){if(bgTimer)return;bgTimer=setInterval(()=>{const now=performance.now();advancePhase(now);updateSessionClock(now);scheduleAudioAhead();if(running&&now-lastMedia>1000){lastMedia=now;mediaState();}},1000);}
 function stopBackgroundTicker(){if(bgTimer){clearInterval(bgTimer);bgTimer=0;}}
 /* stop rendering when backgrounded/locked to save battery; resume cleanly */
-document.addEventListener("visibilitychange",()=>{if(document.hidden){cancelAnimationFrame(rafId);startBackgroundTicker();releaseWakeLock();}else{stopBackgroundTicker();lastNow=0;lastFrameSample=0;setAudioSessionPlayback();if(running&&!paused){audioResume().then(()=>scheduleAudioAhead());acquireWakeLock();mediaState(true);}rafId=requestAnimationFrame(frame);}});
+document.addEventListener("visibilitychange",()=>{if(document.hidden){cancelAnimationFrame(rafId);startBackgroundTicker();releaseWakeLock();}else{stopBackgroundTicker();lastNow=0;lastFrameSample=0;visualAutoQuietUntil=performance.now()+6000;setAudioSessionPlayback();if(running&&!paused){audioResume().then(()=>scheduleAudioAhead());acquireWakeLock();mediaState(true);}cancelAnimationFrame(rafId);rafId=requestAnimationFrame(frame);}});
 
 /* ---------- sacred-geometry mandalas (breath-driven, subtle) ---------- */
 const Mandala=(()=>{
@@ -457,35 +460,36 @@ const Mandala=(()=>{
     bellows:{type:"polygons",sides:8,layers:7,col:["#ffe96b","#9fe04a","#d8ff6b"],rot:0.09}
   };
   const hex=(c,a)=>c+Math.round(Math.max(0,Math.min(1,a))*255).toString(16).padStart(2,"0");
+  const motionScale=reduce?0.4:1;
   const maxR=()=>Math.hypot(W,H)*0.62;
 
-  function rings(c,o,t){const cx=W/2,cy=H*0.5,R=maxR(),rot=t*c.rot;ctx.lineWidth=1.2;
+  function rings(c,o,t){const cx=W/2,cy=H*0.5,R=maxR(),rot=t*c.rot*motionScale;ctx.lineWidth=1.2;
     for(let k=1;k<=7;k++){const rr=R*(k/7)*(0.78+0.22*o);ctx.strokeStyle=hex(c.col[k%c.col.length],0.05+0.07*o);ctx.beginPath();ctx.arc(cx,cy,rr,0,6.2832);ctx.stroke();}
     const sym=c.sym;ctx.save();ctx.translate(cx,cy);ctx.rotate(rot);
     for(let i=0;i<sym;i++){ctx.rotate(6.2832/sym);ctx.strokeStyle=hex(c.col[i%c.col.length],0.05+0.06*o);ctx.beginPath();ctx.moveTo(R*0.12,0);ctx.lineTo(R*(0.78+0.22*o),0);ctx.stroke();ctx.beginPath();ctx.arc(R*(0.55+0.2*o),0,R*0.03*(0.5+o),0,6.2832);ctx.stroke();}
     ctx.restore();}
-  function flower(c,o,t){const cx=W/2,cy=H*0.5,r=maxR()*0.17*(0.85+0.2*o),rot=t*c.rot;ctx.lineWidth=1.1;
+  function flower(c,o,t){const cx=W/2,cy=H*0.5,r=maxR()*0.17*(0.85+0.2*o),rot=t*c.rot*motionScale;ctx.lineWidth=1.1;
     const pts=[[0,0]];for(let ring=1;ring<=3;ring++)for(let i=0;i<6*ring;i++){const a=rot+i/(6*ring)*6.2832;pts.push([Math.cos(a)*r*ring,Math.sin(a)*r*ring]);}
     ctx.save();ctx.translate(cx,cy);
     pts.forEach((p,i)=>{ctx.strokeStyle=hex(c.col[i%c.col.length],0.05+0.06*o);ctx.beginPath();ctx.arc(p[0],p[1],r,0,6.2832);ctx.stroke();});
     ctx.restore();}
   function polygons(c,o,t){const cx=W/2,cy=H*0.5,R=maxR()*(0.85+0.2*o);ctx.lineWidth=1.1;ctx.save();ctx.translate(cx,cy);
-    for(let k=1;k<=c.layers;k++){const rr=R*(k/c.layers);const rot=t*c.rot*(k%2?1:-1)+k*0.2;ctx.strokeStyle=hex(c.col[k%c.col.length],0.05+0.07*o);ctx.beginPath();for(let i=0;i<=c.sides;i++){const a=rot+i/c.sides*6.2832;const x=Math.cos(a)*rr,y=Math.sin(a)*rr;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}ctx.stroke();}
+    for(let k=1;k<=c.layers;k++){const rr=R*(k/c.layers);const rot=t*c.rot*motionScale*(k%2?1:-1)+k*0.2;ctx.strokeStyle=hex(c.col[k%c.col.length],0.05+0.07*o);ctx.beginPath();for(let i=0;i<=c.sides;i++){const a=rot+i/c.sides*6.2832;const x=Math.cos(a)*rr,y=Math.sin(a)*rr;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}ctx.stroke();}
     ctx.restore();}
   function petals(c,o,t){const cx=W/2,cy=H*0.5,R=maxR()*0.62;ctx.save();ctx.translate(cx,cy);
-    for(let L=0;L<c.layers;L++){const rot=t*c.rot*(L%2?-1:1)+L*0.4;const len=R*(0.4+0.6*o)*(0.6+L*0.22);const spread=0.4+0.55*o;
+    for(let L=0;L<c.layers;L++){const rot=t*c.rot*motionScale*(L%2?-1:1)+L*0.4;const len=R*(0.4+0.6*o)*(0.6+L*0.22);const spread=0.4+0.55*o;
       for(let i=0;i<c.sym;i++){ctx.save();ctx.rotate(rot+i/c.sym*6.2832);ctx.strokeStyle=hex(c.col[L%c.col.length],0.06+0.10*o);ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(0,0);ctx.quadraticCurveTo(len*0.34*spread,-len*0.5,0,-len);ctx.quadraticCurveTo(-len*0.34*spread,-len*0.5,0,0);ctx.stroke();ctx.restore();}}
     ctx.restore();}
   function spiral(c,o,t){const cx=W/2,cy=H*0.5,a=maxR()*0.012*(0.7+0.4*o);ctx.save();ctx.translate(cx,cy);
     for(let arm=0;arm<c.arms;arm++){const off=arm/c.arms*6.2832;ctx.strokeStyle=hex(c.col[arm%c.col.length],0.06+0.08*o);ctx.lineWidth=1.1;ctx.beginPath();
-      for(let th=0;th<40;th+=0.3){const r=a*th*8;const ang=th+off+t*c.rot;const x=Math.cos(ang)*r,y=Math.sin(ang)*r;th?ctx.lineTo(x,y):ctx.moveTo(x,y);}ctx.stroke();}
+      for(let th=0;th<40;th+=0.3){const r=a*th*8;const ang=th+off+t*c.rot*motionScale;const x=Math.cos(ang)*r,y=Math.sin(ang)*r;th?ctx.lineTo(x,y):ctx.moveTo(x,y);}ctx.stroke();}
     ctx.restore();}
-  function sunburst(c,o,t){const cx=W/2,cy=H*0.5,R=maxR();ctx.save();ctx.translate(cx,cy);ctx.rotate(t*c.rot);
-    for(let i=0;i<c.sym;i++){const flick=0.7+0.3*Math.sin(t*3+i*1.7);const len=R*(0.35+0.6*o)*flick;ctx.save();ctx.rotate(i/c.sym*6.2832);ctx.strokeStyle=hex(c.col[i%c.col.length],0.08+0.12*o);ctx.lineWidth=i%3?1:1.6;ctx.beginPath();ctx.moveTo(orbR*0.85,0);ctx.lineTo(len,0);ctx.stroke();ctx.restore();}
+  function sunburst(c,o,t){const cx=W/2,cy=H*0.5,R=maxR();ctx.save();ctx.translate(cx,cy);ctx.rotate(t*c.rot*motionScale);
+    for(let i=0;i<c.sym;i++){const flick=reduce?1:0.7+0.3*Math.sin(t*3+i*1.7);const len=R*(0.35+0.6*o)*flick;ctx.save();ctx.rotate(i/c.sym*6.2832);ctx.strokeStyle=hex(c.col[i%c.col.length],0.08+0.12*o);ctx.lineWidth=i%3?1:1.6;ctx.beginPath();ctx.moveTo(orbR*0.85,0);ctx.lineTo(len,0);ctx.stroke();ctx.restore();}
     ctx.restore();}
 
   function draw(t,o){
-    if(reduce||visualMode!=="full")return;
+    if(visualMode!=="full")return;
     ctx.clearRect(0,0,W,H);
     const c=VIS[pat.id];ctx.globalCompositeOperation="lighter";
     ({rings,flower,polygons,petals,spiral,sunburst}[c.type])(c,o,t);
@@ -511,7 +515,7 @@ $("orb").parentElement.addEventListener("click",()=>{if(running)stage.classList.
 
 $("soundTg").setAttribute("aria-pressed",soundOn);
 updateHapticControl();
-resize();paintCat();buildTabs();buildChips();buildDur();buildAmbient();buildVisuals();setPname();mediaSetup();mediaState(true);rafId=requestAnimationFrame(frame);
+resize();paintCat();buildTabs();buildChips();buildDur();buildAmbient();buildVisuals();setPname();mediaSetup();mediaState(true);visualAutoQuietUntil=performance.now()+8000;rafId=requestAnimationFrame(frame);
 </script>
 </body>
 </html>

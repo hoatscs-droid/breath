@@ -10,7 +10,7 @@ Breath is a single-file breathing companion for paced sessions. A central orb, p
 
 - Three practice categories: **Calm**, **Intimacy**, and **Energy**.
 - Nine presets, including timed sessions and open-ended infinity mode.
-- Procedural sacred-geometry visuals with **Full**, **Minimal**, and **Off** modes.
+- Procedural sacred-geometry visuals defaulting to **Full**, with **Minimal** and **Off** modes available.
 - Synthesized ocean-wash breath cues, hold pips, and a quiet optional ambient bed.
 - Haptic phase cues on browsers that support the Vibration API.
 - Media Session support for compatible browser and lock-screen controls.
