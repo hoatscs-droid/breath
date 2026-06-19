@@ -1,0 +1,4 @@
+.DS_Store
+.playwright-cli/
+output/
+codex-brief-lockscreen-and-performance.md
