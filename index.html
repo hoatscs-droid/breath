@@ -3,7 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<link rel="icon" href="data:,">
+<meta name="theme-color" content="#080a1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Breath">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png">
 <title>Breath</title>
 <style>
   :root{
@@ -31,6 +36,8 @@
   .eyebrow .tag{margin-top:6px;font-size:12px;color:rgba(232,234,255,.4);font-style:italic;font-family:"Iowan Old Style",Palatino,Georgia,serif}
   .toggles{position:absolute;right:16px;top:max(22px,env(safe-area-inset-top));display:flex;gap:8px;z-index:6}
   .tg{width:34px;height:34px;border-radius:50%;border:1px solid var(--hair);background:rgba(220,224,255,.04);color:rgba(232,234,255,.55);font-size:14px;cursor:pointer;display:grid;place-items:center;transition:all .3s var(--ease)}
+  .tg[hidden]{display:none}
+  .tg:disabled{cursor:default;opacity:.38}
   .tg[aria-pressed="true"]{color:#0c0f1b;background:var(--body);border-color:transparent}
 
   .orbwrap{flex:1;position:relative;display:flex;align-items:center;justify-content:center;z-index:2}
@@ -185,17 +192,18 @@ const WORDS={in:"breathe in",holdF:"hold",out:"breathe out",holdE:"hold"};
 const DURS=[3,5,10,"inf"];
 
 /* ---------- state ---------- */
-const STORE={sound:"breath.soundOn",ambient:"breath.ambientOn",visual:"breath.visualMode",autoVisual:"breath.visualAutoDowngraded"};
+const STORE={sound:"breath.soundOn",haptic:"breath.hapticOn",ambient:"breath.ambientOn",visual:"breath.visualMode",autoVisual:"breath.visualAutoDowngraded"};
 const VISUAL_MODES=["full","minimal","off"];
 function readStore(k,fallback){try{const v=localStorage.getItem(k);return v===null?fallback:v;}catch(e){return fallback;}}
 function writeStore(k,v){try{localStorage.setItem(k,v);}catch(e){}}
 function readBool(k,fallback){const v=readStore(k,null);return v===null?fallback:v==="true";}
+function supportsHaptics(){return typeof navigator.vibrate==="function";}
 let cat="calm",pat=CATS.calm.patterns[0],durMin=5;
 let running=false,paused=false,safetyOK=false;
 let phases=[],pIdx=0,pStart=0,sessStart=0,pauseAt=0;
 let breathOpen=0,prevOpen=0,prevDir=0,idleT=0,lastNow=0;
 let audioScheduleUntil=0,bgTimer=0,wakeLock=null,lastFrameSample=0,slowFrameMs=0,visualAutoQuietUntil=0;
-let soundOn=readBool(STORE.sound,true),hapticOn=false,ambientOn=readBool(STORE.ambient,true);
+let soundOn=readBool(STORE.sound,true),hapticOn=supportsHaptics()?readBool(STORE.haptic,false):false,ambientOn=readBool(STORE.ambient,true);
 let visualMode=VISUAL_MODES.includes(readStore(STORE.visual,"full"))?readStore(STORE.visual,"full"):"full";
 const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
 const iOSish=/iP(ad|hone|od)/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
@@ -327,7 +335,20 @@ function updateAmbientBed(fade){
 }
 
 /* ---------- haptics (Android only; iOS Safari has no web vibration) ---------- */
-function vibe(p){if(hapticOn&&navigator.vibrate)navigator.vibrate(p);}
+function updateHapticControl(){
+  const b=$("hapticTg");if(!b)return;
+  const ok=supportsHaptics();
+  if(!ok)hapticOn=false;
+  b.hidden=!ok;b.disabled=!ok;
+  b.setAttribute("aria-pressed",String(ok&&hapticOn));
+  b.setAttribute("aria-label",ok?"Haptics":"Haptics unavailable");
+  b.title=ok?(hapticOn?"Haptics on":"Haptics"):"Haptics unavailable";
+}
+function setHaptics(on){
+  if(!supportsHaptics()){hapticOn=false;writeStore(STORE.haptic,"false");updateHapticControl();return;}
+  hapticOn=!!on;writeStore(STORE.haptic,String(hapticOn));updateHapticControl();if(hapticOn)vibe(20);
+}
+function vibe(p){if(!hapticOn||!supportsHaptics())return;try{navigator.vibrate(p);}catch(e){}}
 
 /* ---------- Media Session (lock-screen controls + timeline scaffolding) ---------- */
 function mediaSetup(){if(!("mediaSession" in navigator))return;try{
@@ -336,7 +357,7 @@ function mediaSetup(){if(!("mediaSession" in navigator))return;try{
   navigator.mediaSession.setActionHandler("stop",()=>end());
   ["seekto","seekbackward","seekforward","previoustrack","nexttrack"].forEach(a=>{try{navigator.mediaSession.setActionHandler(a,null);}catch(e){}});
 }catch(e){}}
-function mediaMeta(){if(!("mediaSession" in navigator)||typeof MediaMetadata==="undefined")return;try{navigator.mediaSession.metadata=new MediaMetadata({title:pat.n+(durMin==="inf"?" ∞":""),artist:CATS[cat].label,album:"Breath"});}catch(e){}}
+function mediaMeta(){if(!("mediaSession" in navigator)||typeof MediaMetadata==="undefined")return;try{navigator.mediaSession.metadata=new MediaMetadata({title:pat.n+(durMin==="inf"?" ∞":""),artist:CATS[cat].label,album:"Breath",artwork:[{src:"icons/icon-192.png",sizes:"192x192",type:"image/png"},{src:"icons/icon-512.png",sizes:"512x512",type:"image/png"}]});}catch(e){}}
 function mediaState(force){if(!("mediaSession" in navigator))return;try{navigator.mediaSession.playbackState=running?(paused?"paused":"playing"):"none";}catch(e){}
   if(typeof navigator.mediaSession.setPositionState!=="function")return;
   try{
@@ -479,7 +500,7 @@ $("gateGo").onclick=()=>{safetyOK=true;$("gate").classList.remove("on");start();
 $("gateBack").onclick=()=>$("gate").classList.remove("on");
 $("pauseBtn").onclick=togglePause;$("endBtn").onclick=end;
 $("soundTg").onclick=()=>{soundOn=!soundOn;writeStore(STORE.sound,String(soundOn));$("soundTg").setAttribute("aria-pressed",soundOn);audioResume();setCueBus();updateAmbientBed();if(soundOn){audioScheduleUntil=performance.now();scheduleAudioAhead();}else stopTrackedAudio();};
-$("hapticTg").onclick=()=>{hapticOn=!hapticOn;$("hapticTg").setAttribute("aria-pressed",hapticOn);if(hapticOn)vibe(20);};
+$("hapticTg").onclick=()=>setHaptics(!hapticOn);
 function openSettings(){$("settingsSheet").classList.add("on");$("settingsSheet").setAttribute("aria-hidden","false");}
 function closeSettings(){$("settingsSheet").classList.remove("on");$("settingsSheet").setAttribute("aria-hidden","true");}
 $("settingsTg").onclick=openSettings;
@@ -489,6 +510,7 @@ addEventListener("keydown",e=>{if(e.key==="Escape")closeSettings();});
 $("orb").parentElement.addEventListener("click",()=>{if(running)stage.classList.toggle("dim");});
 
 $("soundTg").setAttribute("aria-pressed",soundOn);
+updateHapticControl();
 resize();paintCat();buildTabs();buildChips();buildDur();buildAmbient();buildVisuals();setPname();mediaSetup();mediaState(true);rafId=requestAnimationFrame(frame);
 </script>
 </body>

@@ -12,18 +12,21 @@ Breath is a single-file breathing companion for paced sessions. A central orb, p
 - Nine presets, including timed sessions and open-ended infinity mode.
 - Procedural sacred-geometry visuals with **Full**, **Minimal**, and **Off** modes.
 - Synthesized ocean-wash breath cues, hold pips, and a quiet optional ambient bed.
+- Haptic phase cues on browsers that support the Vibration API.
 - Media Session support for compatible browser and lock-screen controls.
 - Energy practices are protected by an in-app safety gate.
 
 ## Install on iPhone or Android
 
-Breath is a Progressive Web App. To install it:
+Breath is a Progressive Web App with a dedicated home-screen icon. To install it:
 
 1. Open the live link in Safari on iPhone or Chrome on Android.
 2. Use the browser share/menu button.
 3. Choose **Add to Home Screen** or **Install app**.
 
 It also runs directly in any modern desktop browser.
+
+Haptics work where the browser exposes vibration controls, typically Android Chrome. iPhone Safari does not currently expose web haptics, so Breath hides that toggle on unsupported browsers.
 
 ## Privacy
 
@@ -35,7 +38,7 @@ Breath is a pacing tool, not a medical device. It does not diagnose, treat, or p
 
 ## Tech
 
-A single `index.html` using plain HTML, CSS, JavaScript, Canvas, Web Audio, Media Session, and local storage. No frameworks, no build step, no dependencies, no external requests, and no bundled binary assets.
+A single `index.html` using plain HTML, CSS, JavaScript, Canvas, Web Audio, Media Session, a web app manifest, PNG icons, and local storage. No frameworks, no build step, no dependencies, and no external requests.
 
 ## License
 
