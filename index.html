@@ -19,6 +19,7 @@
     --ease:cubic-bezier(.45,0,.55,1);
   }
   *{box-sizing:border-box;margin:0;padding:0}
+  button,.tg,.rb,.tab,.chip,.dur button,.seg button{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
   html,body{height:100%}
   body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:#05070b;color:var(--ui);-webkit-font-smoothing:antialiased;overflow:hidden;display:flex;align-items:center;justify-content:center}
   #stage{position:relative;width:100%;max-width:430px;height:100dvh;max-height:932px;overflow:hidden;background:linear-gradient(180deg,var(--bg-0),var(--bg-1));display:flex;flex-direction:column}
@@ -36,7 +37,7 @@
   .eyebrow .tag{margin-top:7px;font-size:14px;color:rgba(232,234,255,.46);font-style:italic;font-family:"Iowan Old Style",Palatino,Georgia,serif}
   #stage[data-cat="holotropic"] .eyebrow .cat{letter-spacing:.34em}
   .toggles{position:absolute;right:16px;top:max(22px,env(safe-area-inset-top));display:flex;gap:8px;z-index:6}
-  .tg{width:34px;height:34px;border-radius:50%;border:1px solid var(--hair);background:rgba(220,224,255,.04);color:rgba(232,234,255,.55);font-size:14px;cursor:pointer;display:grid;place-items:center;transition:all .3s var(--ease)}
+  .tg{position:relative;width:44px;height:44px;border-radius:50%;border:1px solid var(--hair);background:rgba(220,224,255,.04);color:rgba(232,234,255,.55);font-size:15px;cursor:pointer;display:grid;place-items:center;transition:all .3s var(--ease)}
   .tg[hidden]{display:none}
   .tg:disabled{cursor:default;opacity:.38}
   .tg[aria-pressed="true"]{color:#0c0f1b;background:var(--body);border-color:transparent}
@@ -85,6 +86,7 @@
   .begin:active{transform:scale(.985)}
 
   #stage.running .topbar .eyebrow,#stage.running .panel{opacity:0;pointer-events:none}
+  #stage.running #resetTg{opacity:0;pointer-events:none}
   #stage.running .panel{transform:translateY(8px)}
   #stage.running.dim .runbar{opacity:0}
   .runbar{position:absolute;left:0;right:0;bottom:calc(28px + env(safe-area-inset-bottom));z-index:4;display:flex;align-items:center;justify-content:center;gap:14px;opacity:0;transition:opacity .6s var(--ease);pointer-events:none}
@@ -93,7 +95,7 @@
   .rb{width:46px;height:46px;border-radius:50%;border:1px solid var(--hair);background:rgba(220,224,255,.04);color:var(--text);cursor:pointer;font-size:15px;display:grid;place-items:center;transition:transform .25s var(--ease)}
   .rb:active{transform:scale(.92)}
 
-  .gate{position:absolute;inset:0;z-index:9;background:rgba(5,3,15,.86);backdrop-filter:blur(6px);display:none;flex-direction:column;justify-content:center;padding:32px 28px;overflow-y:auto}
+  .gate{position:absolute;inset:0;z-index:9;background:rgba(5,3,15,.86);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);display:none;flex-direction:column;justify-content:center;padding:32px 28px;overflow-y:auto}
   .gate.on{display:flex}
   .gate h3{font-family:"Iowan Old Style",Palatino,Georgia,serif;font-size:21px;color:var(--text);margin-bottom:14px}
   .gate p{font-size:13px;line-height:1.65;color:rgba(232,234,255,.66);margin-bottom:10px}
@@ -103,12 +105,12 @@
   .gate .acts{display:flex;gap:10px}
   .gate .acts button{flex:1;padding:13px;border-radius:11px;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;border:1px solid var(--hair);background:transparent;color:rgba(232,234,255,.7)}
   .gate .acts .go{border:none;color:#0c0f1b;background:var(--body)}
-  .sheet{position:absolute;inset:0;z-index:8;display:none;align-items:flex-end;justify-content:center;background:rgba(5,3,15,.58);backdrop-filter:blur(5px);padding:0 18px calc(18px + env(safe-area-inset-bottom))}
+  .sheet{position:absolute;inset:0;z-index:8;display:none;align-items:flex-end;justify-content:center;background:rgba(5,3,15,.58);-webkit-backdrop-filter:blur(5px);backdrop-filter:blur(5px);padding:0 18px calc(18px + env(safe-area-inset-bottom))}
   .sheet.on{display:flex}
   .sheet-card{width:100%;max-width:360px;border:1px solid var(--hair);border-radius:14px;background:rgba(8,8,20,.86);box-shadow:0 28px 70px rgba(0,0,0,.42);padding:18px}
   .sheet-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
   .sheet-title{font-family:"Iowan Old Style",Palatino,Georgia,serif;font-size:19px;color:var(--text)}
-  .sheet-close{width:34px;height:34px;border-radius:50%;border:1px solid var(--hair);background:transparent;color:rgba(232,234,255,.7);font-size:18px;line-height:1;cursor:pointer}
+  .sheet-close{position:relative;width:44px;height:44px;border-radius:50%;border:1px solid var(--hair);background:transparent;color:rgba(232,234,255,.7);font-size:18px;line-height:1;cursor:pointer}
 
   @media (prefers-reduced-motion: reduce){.orb::after{animation:none}}
   @media (max-width:360px){
@@ -133,6 +135,7 @@
   </div>
   <div class="toggles">
     <button class="tg" id="soundTg" aria-pressed="true" aria-label="Sound" title="Sound">♪</button>
+    <button class="tg" id="resetTg" aria-label="Reset" title="Reset">⟳</button>
     <button class="tg" id="settingsTg" aria-label="Settings" title="Settings">⚙</button>
   </div>
 
@@ -185,7 +188,10 @@ const CATS={
     patterns:[
       {id:"coherent",n:"Coherent",d:"5.5 · 5.5",how:"An even, steady rhythm — about five and a half seconds in, the same out. The balanced pace gently settles the nervous system.",ph:[["in",5.5],["out",5.5]]},
       {id:"box",n:"Box",d:"4 · 4 · 4 · 4",how:"Equal counts: in, hold, out, hold. The square, repeating shape steadies a busy mind.",ph:[["in",4],["holdF",4],["out",4],["holdE",4]]},
-      {id:"478",n:"4-7-8",d:"4 · 7 · 8",how:"A short breath in, a long hold, and a slow, extended breath out — a wind-down toward rest.",ph:[["in",4],["holdF",7],["out",8]]}]},
+      {id:"478",n:"4-7-8",d:"4 · 7 · 8",how:"A short breath in, a long hold, and a slow, extended breath out — a wind-down toward rest.",ph:[["in",4],["holdF",7],["out",8]]},
+      {id:"diaphragmatic",n:"Diaphragmatic",d:"4 · 6",how:"Relearn the breath stress takes away. Ribs down, belly soft — never sucked in. Breathe low and wide so the belly, lower ribs, and back all expand, then let the air fall out on its own.",ph:[["in",4],["out",6]],cues:{in:["expand low — belly, ribs, and back","let the belly go soft and wide","let the pelvic floor lengthen and drop","breathe behind the navel, not up into the chest"],out:["let it recoil on its own — don't push","nothing to hold, nothing to grip","soften the jaw, soften the belly","slow and quiet, all the way down"]}},
+      {id:"extendedexhale",n:"Long Exhale",d:"4 · 8",how:"A longer out-breath than in-breath tilts you toward calm — the exhale is where the nervous system downshifts. Breathe in low for four, then release slowly for eight.",ph:[["in",4],["out",8]],cues:{in:["low and easy — belly and ribs widen","don't rush the top"],out:["long, smooth, all the way out","let the shoulders and belly soften as you go","this slow release is the calming part"]}},
+      {id:"sigh",n:"Sigh",d:"double in · long out",how:"The fastest way to shed a spike of stress. Breathe in fully through the nose — then, at the top, sip in a little more air. Hold a beat, then let it all go in a long, slow exhale through the mouth. Repeat a few times.",ph:[["in",3],["holdF",0.5],["out",7]],cues:{in:["full breath in through the nose","…then a small sip more at the top"],holdF:["a brief catch at the top"],out:["long, complete release through the mouth","let everything drop — face, shoulders, belly"]}}]},
   intimacy:{label:"Intimacy",tag:"presence & connection",
     note:"A traditional practice — valued experientially more than it has been clinically studied.",
     vars:{"--bg-0":"#160611","--bg-1":"#0c0308","--core":"#ffd6e6","--body":"#ff5c9a","--rim":"#5e1238","--glow":"#e0408f","--text":"#ffdfec","--eyebrow":"#e293b8"},
@@ -225,13 +231,15 @@ let cycleMs=0,cyclesTotal=Infinity,plannedEndMs=Infinity;
 let breathOpen=0,prevOpen=0,prevDir=0,idleT=0,lastNow=0;
 const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
 let audioScheduleUntil=0,bgTimer=0,wakeLock=null,lastFrameSample=0,slowFrameMs=0,visualAutoQuietUntil=0;
+let audioInterrupted=false,interruptionAt=0,recoverTimer=0,audioResumeBusy=false,mediaPauseGuard=0;
 let soundOn=readBool(STORE.sound,true),ambientOn=readBool(STORE.ambient,true);
+let wasQuickReset=false,quickResetState=null;
 const _storedVisual=readStore(STORE.visual,null),_visualWasAuto=readBool(STORE.autoVisual,false);
 const _discardAutoVisual=_visualWasAuto&&_storedVisual==="minimal";
 let visualMode=(_storedVisual&&VISUAL_MODES.includes(_storedVisual)&&!_discardAutoVisual)?_storedVisual:"full";
 if(_visualWasAuto){writeStore(STORE.autoVisual,"false");if(_discardAutoVisual)writeStore(STORE.visual,visualMode);}
 const iOSish=/iP(ad|hone|od)/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
-const needsPlaybackFloor=()=>running&&!paused&&(iOSish||!!navigator.audioSession);
+const needsPlaybackFloor=()=>running&&!paused&&!audioInterrupted&&(iOSish||!!navigator.audioSession);
 
 const $=id=>document.getElementById(id);
 const stage=$("stage"),orb=$("orb"),canvas=$("bg"),ctx=canvas.getContext("2d"),mediaSink=$("mediaSink");
@@ -253,6 +261,7 @@ function buildAmbient(){const a=$("ambient");a.innerHTML="";["on","off"].forEach
 function setVisualMode(mode,auto){if(!VISUAL_MODES.includes(mode))mode="full";visualMode=mode;stage.dataset.visual=mode;if(auto){writeStore(STORE.autoVisual,"true");}else{writeStore(STORE.visual,mode);writeStore(STORE.autoVisual,"false");}buildVisuals();}
 function buildVisuals(){stage.dataset.visual=visualMode;const v=$("visuals");v.innerHTML="";[{id:"full",label:"Full"},{id:"minimal",label:"Min"},{id:"off",label:"Off"}].forEach(opt=>{const b=document.createElement("button");b.textContent=opt.label;b.setAttribute("aria-pressed",opt.id===visualMode);b.onclick=()=>{writeStore(STORE.autoVisual,"false");visualAutoQuietUntil=performance.now()+60000;setVisualMode(opt.id,false);};v.appendChild(b);});}
 function setPname(){$("pname").innerHTML='<b>'+pat.n+'</b> &nbsp;·&nbsp; '+pat.d;}
+function rebuildSetupPanel(){paintCat();buildTabs();buildChips();buildDur();setPname();refreshInfo();}
 const GATE_COPY={
   energy:{title:"Before you begin",body:"Activating practices use fast breathing and breath holds. They can make you lightheaded.",items:["Sit or lie down — never in or near water, or while driving or standing.","Stop if you feel dizzy, faint, or short of breath. That feeling is the signal to rest.","Skip these if you are pregnant, or have cardiovascular, respiratory, or seizure conditions."],go:"I understand — begin"},
   holotropic:{title:"Read before you begin",body:"This is high-ventilation breathing. It can bring on dizziness, tingling, tightness in the hands (harmless and temporary), strong emotions, and in some people, fainting.",items:["Lie down on a soft surface. Never in or near water, never standing, never while driving.","Don't do this if you are pregnant, or have heart, blood-pressure, respiratory, seizure, or eye-pressure conditions.","Skip it if you have a history of psychosis, bipolar, or significant trauma, or take psychiatric medication, unless a doctor has cleared it — intense breathing can surface overwhelming states.","Keep water nearby. The first few times, have someone you trust within earshot.","You're always in control: open your eyes and breathe normally to come back. Stop the moment anything feels wrong."],go:"I've read this — begin"}
@@ -276,6 +285,43 @@ const AMBIENT={
   holotropic:{freq:[82.41,123.47,185],filter:720,gain:0.021,lfo:0.032,depth:140}
 };
 function setAudioSessionPlayback(){try{if(navigator.audioSession)navigator.audioSession.type="playback";}catch(e){}}
+function audioSessionState(){try{return navigator.audioSession?navigator.audioSession.state:"";}catch(e){return "";}}
+function audioIsBlocked(){return audioSessionState()==="interrupted"||(actx&&actx.state==="interrupted");}
+function clearRecoveryTimer(){if(recoverTimer){clearTimeout(recoverTimer);recoverTimer=0;}}
+function clearAudioInterruption(){clearRecoveryTimer();audioInterrupted=false;interruptionAt=0;}
+function shiftSessionBy(gap){if(gap>0){pStart+=gap;sessStart+=gap;if(plannedEndMs!==Infinity)plannedEndMs+=gap;}}
+function settleAudioInterruption(now){if(audioInterrupted&&interruptionAt)shiftSessionBy((now||performance.now())-interruptionAt);clearAudioInterruption();}
+function markAudioInterrupted(){
+  if(!running||paused||audioInterrupted)return;
+  audioInterrupted=true;interruptionAt=performance.now();audioScheduleUntil=interruptionAt;
+  stopTrackedAudio();setMaster();updateAmbientBed(0.05);releaseWakeLock();mediaState(true);
+}
+function scheduleAudioRecovery(delay){
+  clearRecoveryTimer();if(!audioInterrupted||!running||paused)return;
+  recoverTimer=setTimeout(()=>recoverAudioInterruption(),delay||0);
+}
+function recoverAudioInterruption(){
+  clearRecoveryTimer();if(!audioInterrupted)return;
+  if(!running||paused){clearAudioInterruption();mediaState(true);return;}
+  if(audioIsBlocked()){scheduleAudioRecovery(1000);return;}
+  const now=performance.now();
+  settleAudioInterruption(now);
+  audioScheduleUntil=now;setAudioSessionPlayback();setMaster();setCueBus();startAmbientBed();updateAmbientBed(0.05);
+  audioResume().then(ok=>{if(!running||paused)return;if(!ok||audioIsBlocked()){markAudioInterrupted();scheduleAudioRecovery(1200);return;}scheduleAudioAhead();mediaState(true);acquireWakeLock();});
+}
+function handleAudioSessionState(){const s=audioSessionState();if(s==="interrupted")markAudioInterrupted();else if(audioInterrupted)scheduleAudioRecovery(s==="active"?0:450);}
+function handleAudioContextState(){if(!actx)return;if(actx.state==="interrupted")markAudioInterrupted();else if(actx.state==="running"&&audioInterrupted)scheduleAudioRecovery(0);else if(actx.state==="suspended"&&running&&!paused&&!audioResumeBusy){markAudioInterrupted();scheduleAudioRecovery(900);}}
+function installInterruptionHandlers(){
+  if(mediaSink){
+    mediaSink.addEventListener("pause",()=>{if(performance.now()<mediaPauseGuard)return;if(running&&!paused&&!audioResumeBusy){markAudioInterrupted();scheduleAudioRecovery(900);}});
+    mediaSink.addEventListener("playing",()=>{if(audioInterrupted&&!audioIsBlocked())scheduleAudioRecovery(0);});
+    ["ended","abort","stalled","emptied","error"].forEach(t=>mediaSink.addEventListener(t,()=>{if(running&&!paused){markAudioInterrupted();scheduleAudioRecovery(1200);}}));
+  }
+  try{if(navigator.audioSession&&navigator.audioSession.addEventListener)navigator.audioSession.addEventListener("statechange",handleAudioSessionState);}catch(e){}
+  addEventListener("pageshow",()=>{if(audioInterrupted)scheduleAudioRecovery(0);});
+  addEventListener("focus",()=>{if(audioInterrupted)scheduleAudioRecovery(0);});
+  addEventListener("pointerdown",()=>{if(audioInterrupted)scheduleAudioRecovery(0);},{passive:true});
+}
 function connectDirectOutput(){if(actx&&master&&!directOut){try{master.connect(actx.destination);directOut=true;}catch(e){}}}
 function keepAliveWav(){
   if(_keepAliveWav)return _keepAliveWav;
@@ -294,25 +340,30 @@ function installMediaSink(){
   if(actx.createMediaStreamDestination){try{if(!mediaDest){mediaDest=actx.createMediaStreamDestination();master.connect(mediaDest);}mediaSink.removeAttribute("src");mediaSink.srcObject=mediaDest.stream;mediaSink.loop=false;return true;}catch(e){}}
   return installWavSink();
 }
-async function playMediaSink(){if(!mediaSink)return;try{if(!mediaSink.srcObject&&!mediaSink.src)installMediaSink();if(mediaSink.paused)await mediaSink.play();}catch(e){if(mediaSink.srcObject&&installWavSink()){try{if(mediaSink.paused)await mediaSink.play();}catch(_) {}}}}
-function pauseMediaSink(){if(mediaSink){try{mediaSink.pause();}catch(e){}}}
+async function playMediaSink(){if(!mediaSink)return true;try{if(!mediaSink.srcObject&&!mediaSink.src)installMediaSink();if(mediaSink.paused)await mediaSink.play();return directOut||!mediaSink.paused;}catch(e){if(mediaSink.srcObject&&installWavSink()){try{if(mediaSink.paused)await mediaSink.play();}catch(_) {}}return directOut||!mediaSink.paused;}}
+function pauseMediaSink(){if(mediaSink){try{mediaPauseGuard=performance.now()+650;mediaSink.pause();}catch(e){}}}
 function audioInit(){
   if(actx)return;
   const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;
   actx=new AC();master=actx.createGain();cueBus=actx.createGain();
+  try{actx.addEventListener("statechange",handleAudioContextState);}catch(e){try{actx.onstatechange=handleAudioContextState;}catch(_){}}
   master.gain.value=0;cueBus.gain.value=soundOn?1:0;cueBus.connect(master);
   if(!installMediaSink())connectDirectOutput();
 }
 async function audioResume(){
-  audioInit();if(!actx)return;
-  setAudioSessionPlayback();
-  const mediaPlay=running?playMediaSink():Promise.resolve();
-  if(actx.state==="suspended"||actx.state==="interrupted"){try{await actx.resume();}catch(e){}}
-  if(actx.state!=="running"){try{const silent=actx.createBuffer(1,1,22050),src=actx.createBufferSource();src.buffer=silent;src.connect(actx.destination);src.start(0);await actx.resume();}catch(e){}}
-  try{await mediaPlay;}catch(e){}
-  if(running&&!paused)mediaState(true);
+  audioInit();if(!actx)return true;
+  audioResumeBusy=true;
+  try{
+    setAudioSessionPlayback();
+    const mediaPlay=(running&&!audioInterrupted)?playMediaSink():Promise.resolve(true);
+    if(actx.state==="suspended"||actx.state==="interrupted"){try{await actx.resume();}catch(e){}}
+    if(actx.state!=="running"){try{const silent=actx.createBuffer(1,1,22050),src=actx.createBufferSource();src.buffer=silent;src.connect(actx.destination);src.start(0);await actx.resume();}catch(e){}}
+    let mediaOk=true;try{mediaOk=await mediaPlay;}catch(e){mediaOk=false;}
+    if(running&&!paused&&!audioInterrupted)mediaState(true);
+    return actx.state==="running"&&mediaOk;
+  }finally{audioResumeBusy=false;}
 }
-function setMaster(){if(!master||!actx)return;const t=actx.currentTime;master.gain.cancelScheduledValues(t);master.gain.setValueAtTime(master.gain.value,t);master.gain.linearRampToValueAtTime((running&&!paused)?1:0,t+0.16);}
+function setMaster(){if(!master||!actx)return;const t=actx.currentTime;master.gain.cancelScheduledValues(t);master.gain.setValueAtTime(master.gain.value,t);master.gain.linearRampToValueAtTime((running&&!paused&&!audioInterrupted)?1:0,t+0.16);}
 function setCueBus(){if(!cueBus||!actx)return;const t=actx.currentTime;cueBus.gain.cancelScheduledValues(t);cueBus.gain.setValueAtTime(cueBus.gain.value,t);cueBus.gain.linearRampToValueAtTime(soundOn?1:0,t+0.12);}
 function trackSource(src){trackedSources.add(src);const ended=src.onended;src.onended=function(e){trackedSources.delete(src);if(typeof ended==="function")ended.call(src,e);};return src;}
 function stopTrackedAudio(){if(!actx)return;const t=actx.currentTime;trackedSources.forEach(src=>{try{src.stop(t+0.01);}catch(e){}});trackedSources.clear();audioScheduleUntil=0;}
@@ -367,31 +418,32 @@ function updateAmbientTone(){
 }
 function updateAmbientBed(fade){
   if(!ambient||!actx)return;
-  const cfg=AMBIENT[cat],target=(running&&!paused)?((soundOn&&(ambientOn||pat.padAudio))?cfg.gain:(needsPlaybackFloor()?AMBIENT_FLOOR:0)):0;
+  const cfg=AMBIENT[cat],target=(running&&!paused&&!audioInterrupted)?((soundOn&&(ambientOn||pat.padAudio))?cfg.gain:(needsPlaybackFloor()?AMBIENT_FLOOR:0)):0;
   const t=actx.currentTime;ambient.gain.gain.cancelScheduledValues(t);ambient.gain.gain.setValueAtTime(Math.max(0.00001,ambient.gain.gain.value),t);ambient.gain.gain.linearRampToValueAtTime(target,t+(fade==null?0.35:fade));
   syncAmbientNote();
 }
 function updateBreathPad(){
-  if(!ambient||!actx||!running||paused||!pat.padAudio)return;
+  if(!ambient||!actx||!running||paused||audioInterrupted||!pat.padAudio)return;
   const cfg=AMBIENT[cat],t=actx.currentTime,target=cfg.filter+breathOpen*300,gainTarget=soundOn?cfg.gain*(0.72+breathOpen*0.42):0;
   try{ambient.filter.frequency.setTargetAtTime(target,t,0.18);}catch(e){}
   try{ambient.gain.gain.setTargetAtTime(gainTarget,t,0.22);}catch(e){}
 }
 
+/* Haptics stay disabled without a visible on/off control. */
 function vibe(){}
 
 /* ---------- Media Session (lock-screen controls + timeline scaffolding) ---------- */
 function mediaSetup(){if(!("mediaSession" in navigator))return;try{
-  navigator.mediaSession.setActionHandler("play",()=>{if(paused)togglePause();else if(!running)start();});
+  navigator.mediaSession.setActionHandler("play",()=>{if(paused)togglePause();else if(audioInterrupted)recoverAudioInterruption();else if(!running)start();});
   navigator.mediaSession.setActionHandler("pause",()=>{if(running&&!paused)togglePause();});
   navigator.mediaSession.setActionHandler("stop",()=>end());
   ["seekto","seekbackward","seekforward","previoustrack","nexttrack"].forEach(a=>{try{navigator.mediaSession.setActionHandler(a,null);}catch(e){}});
 }catch(e){}}
 function mediaMeta(){if(!("mediaSession" in navigator)||typeof MediaMetadata==="undefined")return;try{navigator.mediaSession.metadata=new MediaMetadata({title:pat.n+(durMin==="inf"?" ∞":""),artist:CATS[cat].label,album:"Breath",artwork:[{src:"icons/icon-192.png",sizes:"192x192",type:"image/png"},{src:"icons/icon-512.png",sizes:"512x512",type:"image/png"}]});}catch(e){}}
-function mediaState(force){if(!("mediaSession" in navigator))return;try{navigator.mediaSession.playbackState=running?(paused?"paused":"playing"):"none";}catch(e){}
+function mediaState(force){if(!("mediaSession" in navigator))return;try{navigator.mediaSession.playbackState=running?((paused||audioInterrupted)?"paused":"playing"):"none";}catch(e){}
   if(typeof navigator.mediaSession.setPositionState!=="function")return;
   try{
-    if(running&&durMin!=="inf"){const dur=Math.max(1,(plannedEndMs-sessStart)/1000),pos=Math.min(dur,Math.max(0,(performance.now()-sessStart)/1000));navigator.mediaSession.setPositionState({duration:dur,playbackRate:1,position:pos});}
+    if(running&&durMin!=="inf"){const now=audioInterrupted&&interruptionAt?interruptionAt:performance.now(),dur=Math.max(1,(plannedEndMs-sessStart)/1000),pos=Math.min(dur,Math.max(0,(now-sessStart)/1000));navigator.mediaSession.setPositionState({duration:dur,playbackRate:1,position:pos});}
     else if(force){navigator.mediaSession.setPositionState();}
   }catch(e){}}
 
@@ -402,13 +454,13 @@ function fmt(s){s=Math.max(0,Math.floor(s));return String(Math.floor(s/60)).padS
 function cuePhase(type){
   if(type==="in")vibe(35);else if(type==="out")vibe([0,22,30,22]);else vibe(12);
 }
-function setHint(type){const bits=[];if(pat.rounds)bits.push("Round "+roundCount);if(type==="rest")bits.push("rest and notice");else if(pat.id==="tummo")bits.push(type==="holdF"?"draw the belly in · warmth at your center":type==="in"?"full breath":"soft release");$("hint").textContent=bits.join(" · ");}
+function setHint(type){const bits=[];if(pat.rounds)bits.push("Round "+roundCount);if(type==="rest")bits.push("rest and notice");else if(pat.id==="tummo")bits.push(type==="holdF"?"draw the belly in · warmth at your center":type==="in"?"full breath":"soft release");if(pat.cues&&pat.cues[type]&&pat.cues[type].length){const arr=pat.cues[type];const i=(((roundCount-1)%arr.length)+arr.length)%arr.length;bits.push(arr[i]);}$("hint").textContent=bits.join(" · ");}
 function showPhase(type,doVibe){$("word").textContent=WORDS[type]||" ";setHint(type);if(doVibe)cuePhase(type);}
 function enterPhase(i,startAt,doVibe){pIdx=i;pStart=startAt||performance.now();const[type]=phases[i];showPhase(type,doVibe!==false);scheduleAudioAhead();}
 function advancePhase(now){
-  if(!running||paused||!phases.length)return;
+  if(!running||paused||audioInterrupted||!phases.length)return;
   let changed=false;
-  while(running&&!paused&&phases.length&&(now-pStart)/1000>=phases[pIdx][1]){
+  while(running&&!paused&&!audioInterrupted&&phases.length&&(now-pStart)/1000>=phases[pIdx][1]){
     pStart+=phases[pIdx][1]*1000;pIdx=(pIdx+1)%phases.length;changed=true;
     if(pIdx===0){
       if(durMin!=="inf"&&roundCount>=cyclesTotal){finish();return;}
@@ -418,12 +470,12 @@ function advancePhase(now){
   if(changed){const[type]=phases[pIdx];showPhase(type,!document.hidden);scheduleAudioAhead();}
 }
 function updateSessionClock(now){
-  if(!running||paused)return;
+  if(!running||paused||audioInterrupted)return;
   if(durMin==="inf"){$("timer").textContent=fmt((now-sessStart)/1000);return;}
   $("timer").textContent=fmt(Math.max(0,(plannedEndMs-now)/1000));
 }
 function scheduleAudioAhead(){
-  if(!actx||!running||paused||!phases.length)return;
+  if(!actx||!running||paused||audioInterrupted||!phases.length)return;
   if(!soundOn){audioScheduleUntil=performance.now();return;}
   const nowPerf=performance.now(),endPerf=(durMin==="inf")?Infinity:plannedEndMs;
   let idx=pIdx,start=pStart,target=Math.max(audioScheduleUntil||nowPerf,nowPerf-30);
@@ -435,7 +487,7 @@ function scheduleAudioAhead(){
   }
   audioScheduleUntil=start;
 }
-async function acquireWakeLock(){try{if(!running||paused||document.hidden||!("wakeLock" in navigator))return;if(!wakeLock){wakeLock=await navigator.wakeLock.request("screen");wakeLock.addEventListener("release",()=>{wakeLock=null;});}}catch(e){}}
+async function acquireWakeLock(){try{if(!running||paused||audioInterrupted||document.hidden||!("wakeLock" in navigator))return;if(!wakeLock){wakeLock=await navigator.wakeLock.request("screen");wakeLock.addEventListener("release",()=>{wakeLock=null;});}}catch(e){}}
 async function releaseWakeLock(){if(wakeLock){try{await wakeLock.release();}catch(e){}wakeLock=null;}}
 function planSession(now){
   cycleMs=phases.reduce((s,p)=>s+p[1],0)*1000;
@@ -444,30 +496,34 @@ function planSession(now){
   cyclesTotal=n;plannedEndMs=now+n*cycleMs;
 }
 function resetSessionPlan(){cycleMs=0;cyclesTotal=Infinity;plannedEndMs=Infinity;}
+function restoreFromQuickReset(){if(!wasQuickReset||!quickResetState)return;cat=quickResetState.cat;pat=quickResetState.pat;durMin=quickResetState.durMin;wasQuickReset=false;quickResetState=null;rebuildSetupPanel();}
+function syncResetControl(){const b=$("resetTg");if(!b)return;b.disabled=running;b.setAttribute("aria-hidden",running?"true":"false");b.inert=running;}
 function start(){
   phases=activePhases();if(!phases.length)return;
   const now=performance.now();
+  clearAudioInterruption();
   running=true;paused=false;pendingFinish=false;roundCount=1;sessStart=now;planSession(now);audioScheduleUntil=now;
   stage.classList.add("running");stage.classList.remove("dim");$("pauseBtn").textContent="❚❚";
-  audioResume().then(()=>scheduleAudioAhead());startAmbientBed();setMaster();setCueBus();updateAmbientBed(0.05);enterPhase(0,now,true);mediaMeta();mediaState(true);acquireWakeLock();
+  syncResetControl();
+  audioResume().then(ok=>{if(ok)scheduleAudioAhead();else{markAudioInterrupted();scheduleAudioRecovery(1200);}});startAmbientBed();setMaster();setCueBus();updateAmbientBed(0.05);enterPhase(0,now,true);mediaMeta();mediaState(true);acquireWakeLock();
 }
-function togglePause(){if(!running)return;if(!paused){paused=true;pauseAt=performance.now();$("pauseBtn").textContent="▶";setMaster();updateAmbientBed();mediaState(true);releaseWakeLock();setTimeout(()=>{if(paused&&actx){pauseMediaSink();try{if(actx.state==="running")actx.suspend();}catch(e){}}},220);}else{const now=performance.now(),g=now-pauseAt;pStart+=g;sessStart+=g;if(plannedEndMs!==Infinity)plannedEndMs+=g;audioScheduleUntil=now;paused=false;$("pauseBtn").textContent="❚❚";audioResume().then(()=>scheduleAudioAhead());setMaster();setCueBus();startAmbientBed();updateAmbientBed(0.05);mediaState(true);acquireWakeLock();}}
-function finish(){running=false;paused=false;pendingFinish=false;resetSessionPlan();stage.classList.remove("running");stopTrackedAudio();stopAmbientBed();setMaster();updateAmbientBed();pauseMediaSink();releaseWakeLock();mediaState(true);$("word").textContent="complete";$("count").textContent="";$("hint").textContent="";setTimeout(()=>{if(!running)$("word").textContent="ready";},2600);}
-function end(){running=false;paused=false;pendingFinish=false;resetSessionPlan();stage.classList.remove("running");stopTrackedAudio();stopAmbientBed();setMaster();updateAmbientBed();pauseMediaSink();releaseWakeLock();mediaState(true);$("word").textContent="ready";$("count").textContent="";$("hint").textContent="";}
+function togglePause(){if(!running)return;if(!paused){const now=performance.now();settleAudioInterruption(now);paused=true;pauseAt=now;$("pauseBtn").textContent="▶";setMaster();updateAmbientBed();mediaState(true);releaseWakeLock();setTimeout(()=>{if(paused&&actx){pauseMediaSink();try{if(actx.state==="running")actx.suspend();}catch(e){}}},220);}else{const now=performance.now(),g=now-pauseAt;shiftSessionBy(g);audioScheduleUntil=now;paused=false;$("pauseBtn").textContent="❚❚";audioResume().then(ok=>{if(ok)scheduleAudioAhead();else{markAudioInterrupted();scheduleAudioRecovery(1200);}});setMaster();setCueBus();startAmbientBed();updateAmbientBed(0.05);mediaState(true);acquireWakeLock();}}
+function finish(){running=false;paused=false;pendingFinish=false;clearAudioInterruption();resetSessionPlan();stage.classList.remove("running");syncResetControl();stopTrackedAudio();stopAmbientBed();setMaster();updateAmbientBed();pauseMediaSink();releaseWakeLock();mediaState(true);$("word").textContent="complete";$("count").textContent="";$("hint").textContent="";restoreFromQuickReset();setTimeout(()=>{if(!running)$("word").textContent="ready";},2600);}
+function end(){running=false;paused=false;pendingFinish=false;clearAudioInterruption();resetSessionPlan();stage.classList.remove("running");syncResetControl();stopTrackedAudio();stopAmbientBed();setMaster();updateAmbientBed();pauseMediaSink();releaseWakeLock();mediaState(true);$("word").textContent="ready";$("count").textContent="";$("hint").textContent="";restoreFromQuickReset();}
 
 /* ---------- breath signal ---------- */
 function computeOpen(now){
   const [lo,hi]=pat.range||[.58,.98];
   if(running&&!paused){
-    advancePhase(now);updateSessionClock(now);if(!running)return breathOpen;
+    advancePhase(now);updateSessionClock(now);if(!running)return breathOpen;if(audioInterrupted)return breathOpen;
     const [type,dur]=phases[pIdx];let el=(now-pStart)/1000,prog=el/dur;
     let o;if(type==="in")o=easeIO(prog);else if(type==="out")o=easeIO(1-prog);else if(type==="holdF")o=1;else o=0;
     $("count").textContent=dur>=2?Math.max(1,Math.ceil(dur-el)):"";
     return lo+(hi-lo)*o;
-  }else if(paused){return breathOpen;}
+  }else if(paused||audioInterrupted){return breathOpen;}
   else{idleT+=Math.min(0.05,(now-(lastNow||now))/1000);const p=9;return 0.62+0.16*(0.5-0.5*Math.cos(2*Math.PI*(idleT%p)/p));}
 }
-let rafId=0,lastMedia=0;
+let rafId=0,lastMedia=0,lastIdleDraw=0;
 function samplePerformance(now){
   if(!lastFrameSample){lastFrameSample=now;return;}
   const dt=now-lastFrameSample;lastFrameSample=now;
@@ -481,7 +537,8 @@ function frame(now){
   breathOpen=computeOpen(now);lastNow=now;
   prevDir=breathOpen-prevOpen;
   orb.style.transform="scale("+breathOpen.toFixed(4)+")";
-  Mandala.draw(now/1000,breathOpen);
+  if(running){Mandala.draw(now/1000,breathOpen);lastIdleDraw=now;}
+  else if(now-lastIdleDraw>1200){Mandala.draw(now/1000,breathOpen);lastIdleDraw=now;}
   updateBreathPad();
   if(running&&now-lastMedia>500){lastMedia=now;mediaState();}
   prevOpen=breathOpen;rafId=requestAnimationFrame(frame);
@@ -489,7 +546,7 @@ function frame(now){
 function startBackgroundTicker(){if(bgTimer)return;bgTimer=setInterval(()=>{const now=performance.now();advancePhase(now);updateSessionClock(now);scheduleAudioAhead();if(running&&now-lastMedia>1000){lastMedia=now;mediaState();}},1000);}
 function stopBackgroundTicker(){if(bgTimer){clearInterval(bgTimer);bgTimer=0;}}
 /* stop rendering when backgrounded/locked to save battery; resume cleanly */
-document.addEventListener("visibilitychange",()=>{if(document.hidden){cancelAnimationFrame(rafId);startBackgroundTicker();releaseWakeLock();}else{stopBackgroundTicker();lastNow=0;lastFrameSample=0;visualAutoQuietUntil=performance.now()+6000;setAudioSessionPlayback();if(running&&!paused){audioResume().then(()=>scheduleAudioAhead());acquireWakeLock();mediaState(true);}cancelAnimationFrame(rafId);rafId=requestAnimationFrame(frame);}});
+document.addEventListener("visibilitychange",()=>{if(document.hidden){cancelAnimationFrame(rafId);startBackgroundTicker();releaseWakeLock();}else{stopBackgroundTicker();lastNow=0;lastFrameSample=0;visualAutoQuietUntil=performance.now()+6000;setAudioSessionPlayback();if(running&&!paused){if(audioInterrupted)scheduleAudioRecovery(0);else audioResume().then(ok=>{if(ok)scheduleAudioAhead();else{markAudioInterrupted();scheduleAudioRecovery(1200);}});acquireWakeLock();mediaState(true);}cancelAnimationFrame(rafId);rafId=requestAnimationFrame(frame);}});
 
 /* ---------- sacred-geometry mandalas (breath-driven, subtle) ---------- */
 const Mandala=(()=>{
@@ -498,6 +555,9 @@ const Mandala=(()=>{
     coherent:{type:"rings",sym:12,col:["#5a7cff","#8a6cff","#46c8ff"],rot:0.05},
     box:{type:"flower",col:["#5b6cff","#7b5cff","#46a8ff"],rot:0.03},
     "478":{type:"polygons",sides:6,layers:8,col:["#8a6cff","#b14cff","#5a8cff"],rot:0.06},
+    diaphragmatic:{type:"rings",sym:10,col:["#5a7cff","#8a6cff","#46c8ff"],rot:0.04},
+    extendedexhale:{type:"flower",col:["#5b6cff","#7b5cff","#46a8ff"],rot:0.025},
+    sigh:{type:"rings",sym:8,col:["#6a7cff","#8a6cff","#5a8cff"],rot:0.03},
     circular:{type:"petals",sym:10,layers:3,col:["#ff5c9a","#e85cc0","#ffa6cf"],rot:0.04},
     openheart:{type:"flower",col:["#ff6cae","#e85cc0","#ff9ecb"],rot:0.022},
     grounding:{type:"rings",sym:8,col:["#ff7aa6","#e85cc0","#ffb0d2"],rot:0.03},
@@ -552,7 +612,9 @@ $("begin").onclick=()=>{if(needsSafetyGate()){openSafetyGate();return;}start();}
 $("gateGo").onclick=()=>{if(activeGateMode!=="holotropicAlways")safetyOK=true;$("gate").classList.remove("on");start();activeGateMode=null;};
 $("gateBack").onclick=()=>{$("gate").classList.remove("on");activeGateMode=null;};
 $("pauseBtn").onclick=togglePause;$("endBtn").onclick=end;
-$("soundTg").onclick=()=>{soundOn=!soundOn;writeStore(STORE.sound,String(soundOn));$("soundTg").setAttribute("aria-pressed",soundOn);audioResume();setCueBus();updateAmbientBed();if(soundOn){audioScheduleUntil=performance.now();scheduleAudioAhead();}else stopTrackedAudio();};
+$("soundTg").onclick=()=>{soundOn=!soundOn;writeStore(STORE.sound,String(soundOn));$("soundTg").setAttribute("aria-pressed",soundOn);if(audioInterrupted)scheduleAudioRecovery(0);else audioResume();setCueBus();updateAmbientBed();if(soundOn){audioScheduleUntil=performance.now();scheduleAudioAhead();}else stopTrackedAudio();};
+function startQuickReset(){if(running)return;const resetPat=CATS.calm.patterns.find(p=>p.id==="extendedexhale");if(!resetPat)return;quickResetState={cat,pat,durMin};wasQuickReset=true;cat="calm";pat=resetPat;durMin=1.5;paintCat();setPname();start();$("hint").textContent="ribs down — let the belly go soft";}
+$("resetTg").onclick=startQuickReset;
 function openSettings(){$("settingsSheet").classList.add("on");$("settingsSheet").setAttribute("aria-hidden","false");}
 function closeSettings(){$("settingsSheet").classList.remove("on");$("settingsSheet").setAttribute("aria-hidden","true");}
 $("settingsTg").onclick=openSettings;
@@ -562,7 +624,7 @@ addEventListener("keydown",e=>{if(e.key==="Escape")closeSettings();});
 $("orb").parentElement.addEventListener("click",()=>{if(running)stage.classList.toggle("dim");});
 
 $("soundTg").setAttribute("aria-pressed",soundOn);
-resize();paintCat();buildTabs();buildChips();buildDur();buildAmbient();buildVisuals();setPname();mediaSetup();mediaState(true);visualAutoQuietUntil=performance.now()+8000;rafId=requestAnimationFrame(frame);
+resize();paintCat();buildTabs();buildChips();buildDur();buildAmbient();buildVisuals();setPname();syncResetControl();installInterruptionHandlers();mediaSetup();mediaState(true);visualAutoQuietUntil=performance.now()+8000;rafId=requestAnimationFrame(frame);
 </script>
 </body>
 </html>
