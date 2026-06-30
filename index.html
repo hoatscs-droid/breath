@@ -22,7 +22,7 @@
   button,.tg,.rb,.tab,.chip,.dur button,.seg button{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
   html,body{height:100%}
   body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:#05070b;color:var(--ui);-webkit-font-smoothing:antialiased;overflow:hidden;display:flex;align-items:center;justify-content:center}
-  #stage{position:relative;width:100%;max-width:430px;height:100dvh;max-height:932px;overflow:hidden;background:linear-gradient(180deg,var(--bg-0),var(--bg-1));display:flex;flex-direction:column}
+  #stage{position:relative;width:100%;max-width:430px;height:100dvh;max-height:932px;overflow:hidden;background:linear-gradient(180deg,var(--bg-0),var(--bg-1));display:flex;flex-direction:column;--orb-idle-y:clamp(20px,3dvh,32px);--orb-run-y:0px}
   #stage[data-visual="off"]{background:var(--bg-1)}
   #bg{position:absolute;inset:0;z-index:0;display:block}
   #stage[data-visual="minimal"] #bg,#stage[data-visual="off"] #bg{display:none}
@@ -32,7 +32,7 @@
   #stage[data-visual="off"]::before,#stage[data-visual="off"]::after{display:none}
 
   .topbar{position:relative;z-index:5;display:flex;align-items:center;justify-content:space-between;padding:max(24px,env(safe-area-inset-top)) 18px 0}
-  .eyebrow{text-align:center;flex:1;transform:translateY(clamp(68px,11dvh,100px));transition:opacity .8s var(--ease)}
+  .eyebrow{text-align:center;flex:1;transform:translateY(clamp(56px,9dvh,84px));transition:opacity .7s var(--ease)}
   .eyebrow .cat{font-size:13px;letter-spacing:.42em;text-transform:uppercase;color:var(--eyebrow);font-weight:650}
   .eyebrow .tag{margin-top:7px;font-size:14px;color:rgba(232,234,255,.46);font-style:italic;font-family:"Iowan Old Style",Palatino,Georgia,serif}
   #stage[data-cat="holotropic"] .eyebrow .cat{letter-spacing:.34em}
@@ -42,7 +42,7 @@
   .tg:disabled{cursor:default;opacity:.38}
   .tg[aria-pressed="true"]{color:#0c0f1b;background:var(--body);border-color:transparent}
 
-  .orbwrap{flex:1;position:relative;display:flex;align-items:center;justify-content:center;z-index:2}
+  .orbwrap{flex:1;position:relative;display:flex;align-items:center;justify-content:center;z-index:2;transform:translateY(var(--orb-idle-y));transition:transform .7s var(--ease);will-change:transform}
   .orb{position:relative;width:min(52vw,248px);aspect-ratio:1;border-radius:50%;transform:scale(.6);will-change:transform;background:radial-gradient(circle at 36% 32%, var(--core) 0%, var(--body) 42%, var(--rim) 82%, #05030f 100%);box-shadow:inset -12px -16px 40px rgba(0,0,0,.5), inset 9px 11px 26px rgba(255,255,255,.12)}
   .orb::before{content:"";position:absolute;inset:-28%;border-radius:50%;z-index:-1;background:radial-gradient(circle,var(--glow) 0%,transparent 60%);opacity:.4;filter:blur(8px)}
   .orb::after{content:"";position:absolute;inset:9%;border-radius:50%;background:radial-gradient(circle at 60% 70%, rgba(255,255,255,.16), transparent 55%);animation:drift 12s var(--ease) infinite alternate;animation-play-state:paused}
@@ -54,7 +54,7 @@
   .cue .count{margin-top:9px;font-family:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;font-size:30px;font-weight:300;color:rgba(255,255,255,.72);font-variant-numeric:tabular-nums;line-height:1;min-height:34px;text-shadow:0 1px 14px rgba(0,0,0,.5);letter-spacing:.02em}
   .cue .hint{margin-top:11px;font-size:12.5px;font-weight:400;color:rgba(255,255,255,.66);min-height:16px;text-shadow:0 1px 12px rgba(0,0,0,.8),0 0 2px rgba(0,0,0,.5);letter-spacing:.06em;padding:0 24px}
 
-  .panel{position:relative;z-index:3;padding:0 20px calc(20px + env(safe-area-inset-bottom));transition:opacity .7s var(--ease),transform .7s var(--ease)}
+  .panel{position:relative;z-index:3;padding:0 20px calc(20px + env(safe-area-inset-bottom));transition:opacity .5s var(--ease),transform .7s var(--ease)}
   .pname{text-align:center;font-size:13px;color:rgba(232,234,255,.55);margin-bottom:10px;min-height:16px}
   .pname b{color:var(--text);font-weight:600}
   .how{text-align:center;font-size:12px;line-height:1.55;color:rgba(232,234,255,.62);margin:0 auto 8px;max-width:312px}
@@ -86,6 +86,7 @@
   .begin:active{transform:scale(.985)}
 
   #stage.running .topbar .eyebrow,#stage.running .panel{opacity:0;pointer-events:none}
+  #stage.running .orbwrap{transform:translateY(var(--orb-run-y))}
   #stage.running #resetTg{opacity:0;pointer-events:none}
   #stage.running .panel{transform:translateY(8px)}
   #stage.running.dim .runbar{opacity:0}
@@ -118,6 +119,8 @@
     .tab{font-size:8.5px;letter-spacing:.035em}
   }
   @media (max-height:760px){
+    #stage{--orb-idle-y:12px}
+    .eyebrow{transform:translateY(clamp(42px,7dvh,58px))}
     .orb{width:min(44vw,188px)}
     .cue .word{font-size:22px}.cue .count{font-size:26px;min-height:28px}.cue .hint{margin-top:7px}
     .panel{padding:0 20px calc(12px + env(safe-area-inset-bottom))}
@@ -240,11 +243,35 @@ const iOSish=/iP(ad|hone|od)/.test(navigator.userAgent)||(navigator.platform==="
 const needsPlaybackFloor=()=>running&&!paused&&!audioInterrupted&&(iOSish||!!navigator.audioSession);
 
 const $=id=>document.getElementById(id);
-const stage=$("stage"),orb=$("orb"),canvas=$("bg"),ctx=canvas.getContext("2d"),mediaSink=$("mediaSink");
+const stage=$("stage"),orb=$("orb"),orbwrap=orb.parentElement,canvas=$("bg"),ctx=canvas.getContext("2d"),mediaSink=$("mediaSink");
 let W=0,H=0,dpr=1,orbR=110;
 
-function resize(){const r=stage.getBoundingClientRect();W=r.width;H=r.height;dpr=Math.min(window.devicePixelRatio||1,1.5);canvas.width=W*dpr;canvas.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);orbR=orb.offsetWidth/2||Math.min(W*0.26,124);}
-addEventListener("resize",resize);addEventListener("orientationchange",resize);
+function clampValue(v,min,max){return Math.min(max,Math.max(min,v));}
+function currentTranslateY(el){
+  const t=getComputedStyle(el).transform;
+  if(!t||t==="none")return 0;
+  const m=t.match(/^matrix(3d)?\((.+)\)$/);
+  if(!m)return 0;
+  const parts=m[2].split(",").map(Number);
+  return m[1]?parts[13]||0:parts[5]||0;
+}
+function expandedOrbRadius(){
+  const hi=(pat.range&&pat.range[1])||.98;
+  return ((orb.offsetWidth||orbR*2)*hi)/2;
+}
+function syncRunningOrbOffset(){
+  if(!running)return;
+  const stageRect=stage.getBoundingClientRect(),wrapRect=orbwrap.getBoundingClientRect(),runbarRect=$("runbar").getBoundingClientRect();
+  const baseCenter=wrapRect.top+(wrapRect.height/2)-currentTranslateY(orbwrap);
+  const expandedR=expandedOrbRadius(),runbarTop=runbarRect.top>stageRect.top?runbarRect.top:stageRect.bottom;
+  const minCenter=stageRect.top+expandedR+18,maxCenter=runbarTop-expandedR-22;
+  const desired=maxCenter>minCenter?clampValue(stageRect.top+(stageRect.height/2),minCenter,maxCenter):clampValue(stageRect.top+(stageRect.height/2),minCenter,stageRect.bottom-expandedR-18);
+  stage.style.setProperty("--orb-run-y",Math.round(desired-baseCenter)+"px");
+}
+function clearRunningOrbOffset(){stage.style.removeProperty("--orb-run-y");}
+function resize(){const r=stage.getBoundingClientRect();W=r.width;H=r.height;dpr=Math.min(window.devicePixelRatio||1,1.5);canvas.width=W*dpr;canvas.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);orbR=orb.offsetWidth/2||Math.min(W*0.26,124);if(running)requestAnimationFrame(syncRunningOrbOffset);}
+function handleOrientationChange(){resize();setTimeout(resize,180);}
+addEventListener("resize",resize);addEventListener("orientationchange",handleOrientationChange);
 
 /* ---------- controls ---------- */
 function paintCat(){const c=CATS[cat];Object.entries(c.vars).forEach(([k,v])=>stage.style.setProperty(k,v));stage.dataset.cat=cat;$("ebCat").textContent=c.label;$("ebTag").textContent=c.tag;refreshInfo();updateAmbientTone();}
@@ -277,8 +304,8 @@ const trackedSources=new Set();
 const AMBIENT_FLOOR=0.001;
 const AUDIO_SCHEDULE_AHEAD=25000;
 const AMBIENT={
-  calm:{freq:[49,98,146.83,196,293.66],gains:[.12,.14,.075,.045,.024],filter:620,gain:0.026,lfo:0.045,depth:80,slowLfo:0.008,slowDepth:46,drift:0.006,detuneDepth:2.4,wash:{base:330,span:860,gain:0.046,floor:0.008}},
-  intimacy:{freq:[61.74,123.47,185,246.94,370],gains:[.11,.13,.07,.044,.022],filter:760,gain:0.024,lfo:0.038,depth:95,slowLfo:0.007,slowDepth:54,drift:0.005,detuneDepth:2.8,wash:{base:360,span:820,gain:0.044,floor:0.008}},
+  calm:{freq:[49,98,146.83,196,293.66],gains:[.12,.14,.075,.045,.024],filter:620,gain:0.026,lfo:0.045,depth:80,slowLfo:0.008,slowDepth:46,drift:0.006,detuneDepth:2.4,wash:{base:260,span:1420,gain:0.054,floor:0.009,inhaleLift:360,exhaleDip:170,exhaleBoost:0.016,hpIn:165,hpOut:82,qIn:0.72,qOut:0.38}},
+  intimacy:{freq:[61.74,123.47,185,246.94,370],gains:[.11,.13,.07,.044,.022],filter:760,gain:0.024,lfo:0.038,depth:95,slowLfo:0.007,slowDepth:54,drift:0.005,detuneDepth:2.8,wash:{base:290,span:1320,gain:0.052,floor:0.009,inhaleLift:320,exhaleDip:150,exhaleBoost:0.014,hpIn:155,hpOut:78,qIn:0.66,qOut:0.36}},
   energy:{freq:[65.41,130.81,196,261.63,392],gains:[.08,.11,.06,.038,.018],filter:980,gain:0.018,lfo:0.055,depth:120,slowLfo:0.011,slowDepth:60,drift:0.009,detuneDepth:2.2},
   holotropic:{freq:[41.2,82.41,123.47,185,246.94],gains:[.11,.13,.07,.044,.022],filter:720,gain:0.023,lfo:0.032,depth:140,slowLfo:0.006,slowDepth:70,drift:0.004,detuneDepth:3.2}
 };
@@ -371,7 +398,7 @@ function usesSeamlessWash(){return cat==="calm"||cat==="intimacy";}
 function startBreathWash(){
   if(!actx||breathWash||!usesSeamlessWash())return;
   const cfg=AMBIENT[cat],washCfg=cfg.wash||AMBIENT.calm.wash,src=actx.createBufferSource(),hp=actx.createBiquadFilter(),lp=actx.createBiquadFilter(),gain=actx.createGain();
-  src.buffer=noiseBuf();src.loop=true;hp.type="highpass";hp.frequency.value=115;lp.type="lowpass";lp.Q.value=0.45;lp.frequency.value=washCfg.base;gain.gain.value=0;
+  src.buffer=noiseBuf();src.loop=true;hp.type="highpass";hp.frequency.value=washCfg.hpOut||100;lp.type="lowpass";lp.Q.value=washCfg.qOut||0.4;lp.frequency.value=washCfg.base;gain.gain.value=0;
   src.connect(hp).connect(lp).connect(gain).connect(cueBus);src.start();
   breathWash={src,hp,filter:lp,gain};updateBreathWash(0.05);
 }
@@ -388,11 +415,18 @@ function updateBreathWash(fade){
     breathWash.gain.gain.cancelScheduledValues(t);breathWash.gain.gain.setTargetAtTime(0.00001,t,fade||0.18);return;
   }
   const phase=phases[pIdx]&&phases[pIdx][0],open=phase==="rest"?0.12:breathOpen;
-  const targetGain=soundOn?washCfg.floor+washCfg.gain*(0.35+open*0.65):0.00001;
-  const targetCutoff=washCfg.base+washCfg.span*Math.max(0,Math.min(1,open));
+  const rising=phase==="in"||prevDir>0.0007,falling=phase==="out"||prevDir<-0.0007;
+  const dur=(phases[pIdx]&&phases[pIdx][1])||1,prog=Math.max(0,Math.min(1,(performance.now()-pStart)/(dur*1000)));
+  const exhaleRelease=falling?Math.max(0,1-prog):0;
+  const targetGain=soundOn?washCfg.floor+washCfg.gain*(0.2+open*0.8)+(washCfg.exhaleBoost||0)*exhaleRelease*(0.45+open*0.55):0.00001;
+  const targetCutoff=washCfg.base+washCfg.span*Math.max(0,Math.min(1,open))+(rising?(washCfg.inhaleLift||0):0)-(falling?(washCfg.exhaleDip||0)*(0.45+0.55*(1-open)):0);
+  const targetHighpass=rising?(washCfg.hpIn||150):(falling?(washCfg.hpOut||85):115);
+  const targetQ=rising?(washCfg.qIn||0.65):(falling?(washCfg.qOut||0.38):0.45);
   /* During iOS lock, requestAnimationFrame pauses, so this continuous wash holds
      its last calm level instead of phase-pulsing; the hidden audio keeps it alive. */
   breathWash.filter.frequency.setTargetAtTime(targetCutoff,t,0.22);
+  breathWash.filter.Q.setTargetAtTime(targetQ,t,0.22);
+  breathWash.hp.frequency.setTargetAtTime(targetHighpass,t,0.22);
   breathWash.gain.gain.setTargetAtTime(targetGain,t,fade||0.18);
 }
 /* ocean wash: kind 'in' = tide drawing back, kind 'out' = wave washing up then receding */
@@ -540,7 +574,7 @@ function start(){
   const now=performance.now();
   intentionalPause=false;clearAudioInterruption();
   running=true;paused=false;pendingFinish=false;roundCount=1;sessStart=now;planSession(now);audioScheduleUntil=now;
-  stage.classList.add("running");stage.classList.remove("dim");$("pauseBtn").textContent="❚❚";
+  syncRunningOrbOffset();stage.classList.add("running");stage.classList.remove("dim");$("pauseBtn").textContent="❚❚";requestAnimationFrame(syncRunningOrbOffset);
   syncResetControl();
   audioResume().then(ok=>{if(ok)scheduleAudioAhead();else{markAudioInterrupted();scheduleAudioRecovery(1200);}});startAmbientBed();startBreathWash();setMaster();setCueBus();updateAmbientBed(0.05);updateBreathWash(0.05);enterPhase(0,now,true);mediaMeta();mediaState(true);acquireWakeLock();
 }
@@ -559,8 +593,8 @@ function togglePause(){
     acquireWakeLock();
   }
 }
-function finish(){running=false;paused=false;pendingFinish=false;intentionalPause=false;clearAudioInterruption();resetSessionPlan();stage.classList.remove("running");syncResetControl();stopTrackedAudio();stopBreathWash();stopAmbientBed();setMaster();updateAmbientBed();pauseMediaSink();releaseWakeLock();mediaState(true);$("word").textContent="complete";$("count").textContent="";$("hint").textContent="";restoreFromQuickReset();setTimeout(()=>{if(!running)$("word").textContent="ready";},2600);}
-function end(){running=false;paused=false;pendingFinish=false;intentionalPause=false;clearAudioInterruption();resetSessionPlan();stage.classList.remove("running");syncResetControl();stopTrackedAudio();stopBreathWash();stopAmbientBed();setMaster();updateAmbientBed();pauseMediaSink();releaseWakeLock();mediaState(true);$("word").textContent="ready";$("count").textContent="";$("hint").textContent="";restoreFromQuickReset();}
+function finish(){running=false;paused=false;pendingFinish=false;intentionalPause=false;clearAudioInterruption();resetSessionPlan();stage.classList.remove("running","dim");clearRunningOrbOffset();syncResetControl();stopTrackedAudio();stopBreathWash();stopAmbientBed();setMaster();updateAmbientBed();pauseMediaSink();releaseWakeLock();mediaState(true);$("word").textContent="complete";$("count").textContent="";$("hint").textContent="";restoreFromQuickReset();setTimeout(()=>{if(!running)$("word").textContent="ready";},2600);}
+function end(){running=false;paused=false;pendingFinish=false;intentionalPause=false;clearAudioInterruption();resetSessionPlan();stage.classList.remove("running","dim");clearRunningOrbOffset();syncResetControl();stopTrackedAudio();stopBreathWash();stopAmbientBed();setMaster();updateAmbientBed();pauseMediaSink();releaseWakeLock();mediaState(true);$("word").textContent="ready";$("count").textContent="";$("hint").textContent="";restoreFromQuickReset();}
 
 /* ---------- breath signal ---------- */
 function computeOpen(now){
