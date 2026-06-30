@@ -218,7 +218,7 @@ const WORDS={in:"breathe in",holdF:"hold",out:"breathe out",holdE:"hold",rest:"r
 const DURS=[3,5,10,"inf"];
 
 /* ---------- state ---------- */
-const STORE={sound:"breath.soundOn",ambient:"breath.ambientOn",visual:"breath.visualMode",autoVisual:"breath.visualAutoDowngraded"};
+const STORE={sound:"breath.soundOn",ambient:"breath.ambientOn",visual:"breath.visualMode"};
 const VISUAL_MODES=["full","minimal","off"];
 function readStore(k,fallback){try{const v=localStorage.getItem(k);return v===null?fallback:v;}catch(e){return fallback;}}
 function writeStore(k,v){try{localStorage.setItem(k,v);}catch(e){}}
@@ -230,14 +230,12 @@ let pendingFinish=false,roundCount=1;
 let cycleMs=0,cyclesTotal=Infinity,plannedEndMs=Infinity;
 let breathOpen=0,prevOpen=0,prevDir=0,idleT=0,lastNow=0;
 const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
-let audioScheduleUntil=0,bgTimer=0,wakeLock=null,lastFrameSample=0,slowFrameMs=0,visualAutoQuietUntil=0;
-let audioInterrupted=false,interruptionAt=0,recoverTimer=0,audioResumeBusy=false,mediaPauseGuard=0;
+let audioScheduleUntil=0,bgTimer=0,wakeLock=null,lastFrameSample=0,lastSlowFrameMs=0;
+let audioInterrupted=false,interruptionAt=0,recoverTimer=0,audioResumeBusy=false,mediaPauseGuard=0,intentionalPause=false;
 let soundOn=readBool(STORE.sound,true),ambientOn=readBool(STORE.ambient,true);
 let wasQuickReset=false,quickResetState=null;
-const _storedVisual=readStore(STORE.visual,null),_visualWasAuto=readBool(STORE.autoVisual,false);
-const _discardAutoVisual=_visualWasAuto&&_storedVisual==="minimal";
-let visualMode=(_storedVisual&&VISUAL_MODES.includes(_storedVisual)&&!_discardAutoVisual)?_storedVisual:"full";
-if(_visualWasAuto){writeStore(STORE.autoVisual,"false");if(_discardAutoVisual)writeStore(STORE.visual,visualMode);}
+const _storedVisual=readStore(STORE.visual,null);
+let visualMode=(_storedVisual&&VISUAL_MODES.includes(_storedVisual))?_storedVisual:"full";
 const iOSish=/iP(ad|hone|od)/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
 const needsPlaybackFloor=()=>running&&!paused&&!audioInterrupted&&(iOSish||!!navigator.audioSession);
 
@@ -258,8 +256,8 @@ function ensureDurAllowed(){const ds=durChoices();if(ds.some(v=>(v==="inf"&&durM
 function buildDur(){ensureDurAllowed();const d=$("dur");d.innerHTML="";durChoices().forEach(v=>{const b=document.createElement("button");if(v==="inf")b.innerHTML='<span class="inf">∞</span>';else b.textContent=v;b.setAttribute("aria-pressed",(v==="inf"&&durMin==="inf")||v===durMin);b.onclick=()=>{durMin=v;buildDur();};d.appendChild(b);});}
 function syncAmbientNote(){const n=$("ambientNote");if(n)n.classList.toggle("on",!ambientOn&&needsPlaybackFloor());}
 function buildAmbient(){const a=$("ambient");a.innerHTML="";["on","off"].forEach(v=>{const b=document.createElement("button");b.textContent=v==="on"?"On":"Off";b.setAttribute("aria-pressed",(v==="on")===ambientOn);b.onclick=()=>{ambientOn=v==="on";writeStore(STORE.ambient,String(ambientOn));buildAmbient();updateAmbientBed();};a.appendChild(b);});syncAmbientNote();}
-function setVisualMode(mode,auto){if(!VISUAL_MODES.includes(mode))mode="full";visualMode=mode;stage.dataset.visual=mode;if(auto){writeStore(STORE.autoVisual,"true");}else{writeStore(STORE.visual,mode);writeStore(STORE.autoVisual,"false");}buildVisuals();}
-function buildVisuals(){stage.dataset.visual=visualMode;const v=$("visuals");v.innerHTML="";[{id:"full",label:"Full"},{id:"minimal",label:"Min"},{id:"off",label:"Off"}].forEach(opt=>{const b=document.createElement("button");b.textContent=opt.label;b.setAttribute("aria-pressed",opt.id===visualMode);b.onclick=()=>{writeStore(STORE.autoVisual,"false");visualAutoQuietUntil=performance.now()+60000;setVisualMode(opt.id,false);};v.appendChild(b);});}
+function setVisualMode(mode){if(!VISUAL_MODES.includes(mode))mode="full";visualMode=mode;stage.dataset.visual=mode;writeStore(STORE.visual,mode);buildVisuals();}
+function buildVisuals(){stage.dataset.visual=visualMode;const v=$("visuals");v.innerHTML="";[{id:"full",label:"Full"},{id:"minimal",label:"Min"},{id:"off",label:"Off"}].forEach(opt=>{const b=document.createElement("button");b.textContent=opt.label;b.setAttribute("aria-pressed",opt.id===visualMode);b.onclick=()=>setVisualMode(opt.id);v.appendChild(b);});}
 function setPname(){$("pname").innerHTML='<b>'+pat.n+'</b> &nbsp;·&nbsp; '+pat.d;}
 function rebuildSetupPanel(){paintCat();buildTabs();buildChips();buildDur();setPname();refreshInfo();}
 const GATE_COPY={
@@ -274,15 +272,15 @@ function renderGate(mode){const g=GATE_COPY[mode]||GATE_COPY.energy;$("gateTitle
 function openSafetyGate(){activeGateMode=safetyKind();renderGate(gateMode(activeGateMode));$("gate").classList.add("on");}
 
 /* ---------- audio (synthesized, no assets) ---------- */
-let actx=null,master=null,cueBus=null,mediaDest=null,directOut=false,_noise=null,_keepAliveWav=null,ambient=null;
+let actx=null,master=null,cueBus=null,mediaDest=null,directOut=false,_noise=null,_keepAliveWav=null,ambient=null,breathWash=null;
 const trackedSources=new Set();
 const AMBIENT_FLOOR=0.001;
 const AUDIO_SCHEDULE_AHEAD=25000;
 const AMBIENT={
-  calm:{freq:[98,146.83,196],filter:620,gain:0.024,lfo:0.045,depth:80},
-  intimacy:{freq:[123.47,185,246.94],filter:760,gain:0.022,lfo:0.038,depth:95},
-  energy:{freq:[130.81,196,261.63],filter:980,gain:0.018,lfo:0.055,depth:120},
-  holotropic:{freq:[82.41,123.47,185],filter:720,gain:0.021,lfo:0.032,depth:140}
+  calm:{freq:[49,98,146.83,196,293.66],gains:[.12,.14,.075,.045,.024],filter:620,gain:0.026,lfo:0.045,depth:80,slowLfo:0.008,slowDepth:46,drift:0.006,detuneDepth:2.4,wash:{base:330,span:860,gain:0.046,floor:0.008}},
+  intimacy:{freq:[61.74,123.47,185,246.94,370],gains:[.11,.13,.07,.044,.022],filter:760,gain:0.024,lfo:0.038,depth:95,slowLfo:0.007,slowDepth:54,drift:0.005,detuneDepth:2.8,wash:{base:360,span:820,gain:0.044,floor:0.008}},
+  energy:{freq:[65.41,130.81,196,261.63,392],gains:[.08,.11,.06,.038,.018],filter:980,gain:0.018,lfo:0.055,depth:120,slowLfo:0.011,slowDepth:60,drift:0.009,detuneDepth:2.2},
+  holotropic:{freq:[41.2,82.41,123.47,185,246.94],gains:[.11,.13,.07,.044,.022],filter:720,gain:0.023,lfo:0.032,depth:140,slowLfo:0.006,slowDepth:70,drift:0.004,detuneDepth:3.2}
 };
 function setAudioSessionPlayback(){try{if(navigator.audioSession)navigator.audioSession.type="playback";}catch(e){}}
 function audioSessionState(){try{return navigator.audioSession?navigator.audioSession.state:"";}catch(e){return "";}}
@@ -292,35 +290,36 @@ function clearAudioInterruption(){clearRecoveryTimer();audioInterrupted=false;in
 function shiftSessionBy(gap){if(gap>0){pStart+=gap;sessStart+=gap;if(plannedEndMs!==Infinity)plannedEndMs+=gap;}}
 function settleAudioInterruption(now){if(audioInterrupted&&interruptionAt)shiftSessionBy((now||performance.now())-interruptionAt);clearAudioInterruption();}
 function markAudioInterrupted(){
-  if(!running||paused||audioInterrupted)return;
+  if(!running||paused||intentionalPause||audioInterrupted||audioResumeBusy)return;
   audioInterrupted=true;interruptionAt=performance.now();audioScheduleUntil=interruptionAt;
   stopTrackedAudio();setMaster();updateAmbientBed(0.05);releaseWakeLock();mediaState(true);
 }
 function scheduleAudioRecovery(delay){
-  clearRecoveryTimer();if(!audioInterrupted||!running||paused)return;
+  clearRecoveryTimer();if(!audioInterrupted||!running||paused||intentionalPause)return;
   recoverTimer=setTimeout(()=>recoverAudioInterruption(),delay||0);
 }
 function recoverAudioInterruption(){
   clearRecoveryTimer();if(!audioInterrupted)return;
-  if(!running||paused){clearAudioInterruption();mediaState(true);return;}
+  if(!running||paused||intentionalPause){clearAudioInterruption();mediaState(true);return;}
+  if(audioResumeBusy){scheduleAudioRecovery(450);return;}
   if(audioIsBlocked()){scheduleAudioRecovery(1000);return;}
   const now=performance.now();
   settleAudioInterruption(now);
   audioScheduleUntil=now;setAudioSessionPlayback();setMaster();setCueBus();startAmbientBed();updateAmbientBed(0.05);
   audioResume().then(ok=>{if(!running||paused)return;if(!ok||audioIsBlocked()){markAudioInterrupted();scheduleAudioRecovery(1200);return;}scheduleAudioAhead();mediaState(true);acquireWakeLock();});
 }
-function handleAudioSessionState(){const s=audioSessionState();if(s==="interrupted")markAudioInterrupted();else if(audioInterrupted)scheduleAudioRecovery(s==="active"?0:450);}
-function handleAudioContextState(){if(!actx)return;if(actx.state==="interrupted")markAudioInterrupted();else if(actx.state==="running"&&audioInterrupted)scheduleAudioRecovery(0);else if(actx.state==="suspended"&&running&&!paused&&!audioResumeBusy){markAudioInterrupted();scheduleAudioRecovery(900);}}
+function handleAudioSessionState(){const s=audioSessionState();if(s==="interrupted")markAudioInterrupted();else if(audioInterrupted&&!paused&&!intentionalPause&&!audioResumeBusy)scheduleAudioRecovery(s==="active"?0:450);}
+function handleAudioContextState(){if(!actx)return;if(actx.state==="interrupted")markAudioInterrupted();else if(actx.state==="running"&&audioInterrupted&&!intentionalPause&&!audioResumeBusy)scheduleAudioRecovery(0);else if(actx.state==="suspended"&&running&&!paused&&!intentionalPause&&!audioResumeBusy){markAudioInterrupted();scheduleAudioRecovery(900);}}
 function installInterruptionHandlers(){
   if(mediaSink){
-    mediaSink.addEventListener("pause",()=>{if(performance.now()<mediaPauseGuard)return;if(running&&!paused&&!audioResumeBusy){markAudioInterrupted();scheduleAudioRecovery(900);}});
-    mediaSink.addEventListener("playing",()=>{if(audioInterrupted&&!audioIsBlocked())scheduleAudioRecovery(0);});
-    ["ended","abort","stalled","emptied","error"].forEach(t=>mediaSink.addEventListener(t,()=>{if(running&&!paused){markAudioInterrupted();scheduleAudioRecovery(1200);}}));
+    mediaSink.addEventListener("pause",()=>{if(performance.now()<mediaPauseGuard||paused||intentionalPause||audioResumeBusy)return;if(running){markAudioInterrupted();scheduleAudioRecovery(900);}});
+    mediaSink.addEventListener("playing",()=>{if(audioInterrupted&&!audioIsBlocked()&&!paused&&!intentionalPause&&!audioResumeBusy)scheduleAudioRecovery(0);});
+    ["ended","abort","stalled","emptied","error"].forEach(t=>mediaSink.addEventListener(t,()=>{if(running&&!paused&&!intentionalPause&&!audioResumeBusy){markAudioInterrupted();scheduleAudioRecovery(1200);}}));
   }
   try{if(navigator.audioSession&&navigator.audioSession.addEventListener)navigator.audioSession.addEventListener("statechange",handleAudioSessionState);}catch(e){}
-  addEventListener("pageshow",()=>{if(audioInterrupted)scheduleAudioRecovery(0);});
-  addEventListener("focus",()=>{if(audioInterrupted)scheduleAudioRecovery(0);});
-  addEventListener("pointerdown",()=>{if(audioInterrupted)scheduleAudioRecovery(0);},{passive:true});
+  addEventListener("pageshow",()=>{if(audioInterrupted&&!paused&&!intentionalPause)scheduleAudioRecovery(0);});
+  addEventListener("focus",()=>{if(audioInterrupted&&!paused&&!intentionalPause)scheduleAudioRecovery(0);});
+  addEventListener("pointerdown",()=>{if(audioInterrupted&&!paused&&!intentionalPause)scheduleAudioRecovery(0);},{passive:true});
 }
 function connectDirectOutput(){if(actx&&master&&!directOut){try{master.connect(actx.destination);directOut=true;}catch(e){}}}
 function keepAliveWav(){
@@ -368,6 +367,34 @@ function setCueBus(){if(!cueBus||!actx)return;const t=actx.currentTime;cueBus.ga
 function trackSource(src){trackedSources.add(src);const ended=src.onended;src.onended=function(e){trackedSources.delete(src);if(typeof ended==="function")ended.call(src,e);};return src;}
 function stopTrackedAudio(){if(!actx)return;const t=actx.currentTime;trackedSources.forEach(src=>{try{src.stop(t+0.01);}catch(e){}});trackedSources.clear();audioScheduleUntil=0;}
 function noiseBuf(){if(_noise)return _noise;const len=Math.floor(actx.sampleRate*2);_noise=actx.createBuffer(1,len,actx.sampleRate);const d=_noise.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;return _noise;}
+function usesSeamlessWash(){return cat==="calm"||cat==="intimacy";}
+function startBreathWash(){
+  if(!actx||breathWash||!usesSeamlessWash())return;
+  const cfg=AMBIENT[cat],washCfg=cfg.wash||AMBIENT.calm.wash,src=actx.createBufferSource(),hp=actx.createBiquadFilter(),lp=actx.createBiquadFilter(),gain=actx.createGain();
+  src.buffer=noiseBuf();src.loop=true;hp.type="highpass";hp.frequency.value=115;lp.type="lowpass";lp.Q.value=0.45;lp.frequency.value=washCfg.base;gain.gain.value=0;
+  src.connect(hp).connect(lp).connect(gain).connect(cueBus);src.start();
+  breathWash={src,hp,filter:lp,gain};updateBreathWash(0.05);
+}
+function stopBreathWash(){
+  if(!breathWash||!actx)return;
+  const old=breathWash,t=actx.currentTime;old.gain.gain.cancelScheduledValues(t);old.gain.gain.setValueAtTime(Math.max(0.00001,old.gain.gain.value),t);old.gain.gain.linearRampToValueAtTime(0.00001,t+0.25);
+  try{old.src.stop(t+0.32);}catch(e){}
+  setTimeout(()=>{try{old.src.disconnect();old.hp.disconnect();old.filter.disconnect();old.gain.disconnect();}catch(e){}if(breathWash===old)breathWash=null;},460);
+}
+function updateBreathWash(fade){
+  if(!actx||!breathWash)return;
+  const cfg=AMBIENT[cat],washCfg=(cfg&&cfg.wash)||AMBIENT.calm.wash,t=actx.currentTime;
+  if(!running||paused||audioInterrupted||!usesSeamlessWash()){
+    breathWash.gain.gain.cancelScheduledValues(t);breathWash.gain.gain.setTargetAtTime(0.00001,t,fade||0.18);return;
+  }
+  const phase=phases[pIdx]&&phases[pIdx][0],open=phase==="rest"?0.12:breathOpen;
+  const targetGain=soundOn?washCfg.floor+washCfg.gain*(0.35+open*0.65):0.00001;
+  const targetCutoff=washCfg.base+washCfg.span*Math.max(0,Math.min(1,open));
+  /* During iOS lock, requestAnimationFrame pauses, so this continuous wash holds
+     its last calm level instead of phase-pulsing; the hidden audio keeps it alive. */
+  breathWash.filter.frequency.setTargetAtTime(targetCutoff,t,0.22);
+  breathWash.gain.gain.setTargetAtTime(targetGain,t,fade||0.18);
+}
 /* ocean wash: kind 'in' = tide drawing back, kind 'out' = wave washing up then receding */
 function wash(dur,kind,when){if(!actx||!cueBus)return;const t=Math.max(actx.currentTime+0.015,when||actx.currentTime);
   const src=trackSource(actx.createBufferSource());src.buffer=noiseBuf();src.loop=true;
@@ -393,21 +420,27 @@ function marimba(when,idx){if(!actx)return;const f=MNOTES[Math.min(idx,MNOTES.le
   o.connect(g).connect(cueBus);o2.connect(g2).connect(g);o.start(when);o2.start(when);o.stop(when+0.6);o2.stop(when+0.6);}
 function holdCue(dur,when){if(!actx)return;const n=Math.min(12,Math.floor(dur));for(let s=0;s<n;s++)marimba((when||actx.currentTime)+s+0.02,s);}
 function bowl(when){if(!actx||!cueBus)return;const t=Math.max(actx.currentTime+0.015,when||actx.currentTime),o=trackSource(actx.createOscillator()),o2=trackSource(actx.createOscillator()),g=actx.createGain(),g2=actx.createGain();o.type="sine";o.frequency.value=110;o2.type="sine";o2.frequency.value=165;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(0.095,t+0.035);g.gain.exponentialRampToValueAtTime(0.0008,t+3.2);g2.gain.value=0.28;o.connect(g).connect(cueBus);o2.connect(g2).connect(g);o.start(t);o2.start(t);o.stop(t+3.4);o2.stop(t+3.4);}
-function playPhaseCue(type,dur,when,idx){if(pat.padAudio){if(type==="rest"||idx===0)bowl(when);return;}if(type==="in")wash(dur,"in",when);else if(type==="out")wash(dur,"out",when);else if(type==="rest")bowl(when);else holdCue(dur,when);}
+function playPhaseCue(type,dur,when,idx){
+  if(usesSeamlessWash()){if(type==="rest")bowl(when);else if(type!=="in"&&type!=="out")holdCue(dur,when);return;}
+  if(pat.padAudio){if(type==="rest"||idx===0)bowl(when);return;}
+  if(type==="in")wash(dur,"in",when);else if(type==="out")wash(dur,"out",when);else if(type==="rest")bowl(when);else holdCue(dur,when);
+}
 function startAmbientBed(){
   if(!actx||ambient)return;
-  const cfg=AMBIENT[cat],mix=actx.createGain(),filter=actx.createBiquadFilter(),gain=actx.createGain(),lfo=actx.createOscillator(),depth=actx.createGain();
-  filter.type="lowpass";filter.Q.value=0.55;filter.frequency.value=cfg.filter;gain.gain.value=0;lfo.type="sine";lfo.frequency.value=cfg.lfo;depth.gain.value=cfg.depth;
-  const oscs=[];cfg.freq.forEach((f,i)=>{const o=actx.createOscillator(),g=actx.createGain();o.type=i%2?"triangle":"sine";o.frequency.value=f;o.detune.value=(i-1)*5;g.gain.value=0.16/(i+1);o.connect(g).connect(mix);o.start();oscs.push(o);});
-  mix.connect(filter).connect(gain).connect(master);lfo.connect(depth).connect(filter.frequency);lfo.start();
-  ambient={mix,filter,gain,lfo,depth,oscs};updateAmbientBed(0.05);
+  const cfg=AMBIENT[cat],mix=actx.createGain(),filter=actx.createBiquadFilter(),gain=actx.createGain(),lfo=actx.createOscillator(),depth=actx.createGain(),slow=actx.createOscillator(),slowDepth=actx.createGain(),drift=actx.createOscillator();
+  filter.type="lowpass";filter.Q.value=0.55;filter.frequency.value=cfg.filter;gain.gain.value=0;lfo.type="sine";lfo.frequency.value=cfg.lfo;depth.gain.value=cfg.depth;slow.type="sine";slow.frequency.value=cfg.slowLfo;slowDepth.gain.value=cfg.slowDepth;drift.type="sine";drift.frequency.value=cfg.drift;
+  const oscs=[],driftGains=[];cfg.freq.forEach((f,i)=>{const o=actx.createOscillator(),g=actx.createGain(),dg=actx.createGain();o.type=i%2?"triangle":"sine";o.frequency.value=f;o.detune.value=(i-2)*3;g.gain.value=(cfg.gains&&cfg.gains[i])||0.04;dg.gain.value=(i%2?-1:1)*(cfg.detuneDepth||2.5);drift.connect(dg).connect(o.detune);o.connect(g).connect(mix);o.start();oscs.push(o);driftGains.push(dg);});
+  mix.connect(filter).connect(gain).connect(master);lfo.connect(depth).connect(filter.frequency);slow.connect(slowDepth).connect(filter.frequency);lfo.start();slow.start();drift.start();
+  ambient={mix,filter,gain,lfo,depth,slow,slowDepth,drift,driftGains,oscs};updateAmbientBed(0.05);
 }
 function stopAmbientBed(){
   if(!ambient||!actx)return;
   const old=ambient,t=actx.currentTime;old.gain.gain.cancelScheduledValues(t);old.gain.gain.setValueAtTime(old.gain.gain.value,t);old.gain.gain.linearRampToValueAtTime(0,t+0.35);
   try{old.lfo.stop(t+0.4);}catch(e){}
+  try{old.slow.stop(t+0.4);}catch(e){}
+  try{old.drift.stop(t+0.4);}catch(e){}
   old.oscs.forEach(o=>{try{o.stop(t+0.4);}catch(e){}});
-  setTimeout(()=>{try{old.mix.disconnect();old.filter.disconnect();old.gain.disconnect();old.depth.disconnect();}catch(e){}if(ambient===old)ambient=null;},520);
+  setTimeout(()=>{try{old.mix.disconnect();old.filter.disconnect();old.gain.disconnect();old.depth.disconnect();old.slowDepth.disconnect();old.driftGains.forEach(g=>g.disconnect());}catch(e){}if(ambient===old)ambient=null;},520);
 }
 function updateAmbientTone(){
   if(!ambient||!actx)return;
@@ -415,6 +448,9 @@ function updateAmbientTone(){
   ambient.filter.frequency.cancelScheduledValues(t);ambient.filter.frequency.linearRampToValueAtTime(cfg.filter,t+0.5);
   ambient.lfo.frequency.cancelScheduledValues(t);ambient.lfo.frequency.linearRampToValueAtTime(cfg.lfo,t+0.5);
   ambient.depth.gain.cancelScheduledValues(t);ambient.depth.gain.linearRampToValueAtTime(cfg.depth,t+0.5);
+  ambient.slow.frequency.cancelScheduledValues(t);ambient.slow.frequency.linearRampToValueAtTime(cfg.slowLfo,t+0.5);
+  ambient.slowDepth.gain.cancelScheduledValues(t);ambient.slowDepth.gain.linearRampToValueAtTime(cfg.slowDepth,t+0.5);
+  ambient.drift.frequency.cancelScheduledValues(t);ambient.drift.frequency.linearRampToValueAtTime(cfg.drift,t+0.5);
 }
 function updateAmbientBed(fade){
   if(!ambient||!actx)return;
@@ -423,8 +459,9 @@ function updateAmbientBed(fade){
   syncAmbientNote();
 }
 function updateBreathPad(){
-  if(!ambient||!actx||!running||paused||audioInterrupted||!pat.padAudio)return;
-  const cfg=AMBIENT[cat],t=actx.currentTime,target=cfg.filter+breathOpen*300,gainTarget=soundOn?cfg.gain*(0.72+breathOpen*0.42):0;
+  if(!ambient||!actx||!running||paused||audioInterrupted)return;
+  const cfg=AMBIENT[cat],t=actx.currentTime,audible=soundOn&&(ambientOn||pat.padAudio),floor=needsPlaybackFloor()?AMBIENT_FLOOR:0;
+  const target=cfg.filter+breathOpen*(pat.padAudio?300:120),gainTarget=audible?cfg.gain*(pat.padAudio?0.72+breathOpen*0.42:0.9+breathOpen*0.12):floor;
   try{ambient.filter.frequency.setTargetAtTime(target,t,0.18);}catch(e){}
   try{ambient.gain.gain.setTargetAtTime(gainTarget,t,0.22);}catch(e){}
 }
@@ -501,15 +538,29 @@ function syncResetControl(){const b=$("resetTg");if(!b)return;b.disabled=running
 function start(){
   phases=activePhases();if(!phases.length)return;
   const now=performance.now();
-  clearAudioInterruption();
+  intentionalPause=false;clearAudioInterruption();
   running=true;paused=false;pendingFinish=false;roundCount=1;sessStart=now;planSession(now);audioScheduleUntil=now;
   stage.classList.add("running");stage.classList.remove("dim");$("pauseBtn").textContent="❚❚";
   syncResetControl();
-  audioResume().then(ok=>{if(ok)scheduleAudioAhead();else{markAudioInterrupted();scheduleAudioRecovery(1200);}});startAmbientBed();setMaster();setCueBus();updateAmbientBed(0.05);enterPhase(0,now,true);mediaMeta();mediaState(true);acquireWakeLock();
+  audioResume().then(ok=>{if(ok)scheduleAudioAhead();else{markAudioInterrupted();scheduleAudioRecovery(1200);}});startAmbientBed();startBreathWash();setMaster();setCueBus();updateAmbientBed(0.05);updateBreathWash(0.05);enterPhase(0,now,true);mediaMeta();mediaState(true);acquireWakeLock();
 }
-function togglePause(){if(!running)return;if(!paused){const now=performance.now();settleAudioInterruption(now);paused=true;pauseAt=now;$("pauseBtn").textContent="▶";setMaster();updateAmbientBed();mediaState(true);releaseWakeLock();setTimeout(()=>{if(paused&&actx){pauseMediaSink();try{if(actx.state==="running")actx.suspend();}catch(e){}}},220);}else{const now=performance.now(),g=now-pauseAt;shiftSessionBy(g);audioScheduleUntil=now;paused=false;$("pauseBtn").textContent="❚❚";audioResume().then(ok=>{if(ok)scheduleAudioAhead();else{markAudioInterrupted();scheduleAudioRecovery(1200);}});setMaster();setCueBus();startAmbientBed();updateAmbientBed(0.05);mediaState(true);acquireWakeLock();}}
-function finish(){running=false;paused=false;pendingFinish=false;clearAudioInterruption();resetSessionPlan();stage.classList.remove("running");syncResetControl();stopTrackedAudio();stopAmbientBed();setMaster();updateAmbientBed();pauseMediaSink();releaseWakeLock();mediaState(true);$("word").textContent="complete";$("count").textContent="";$("hint").textContent="";restoreFromQuickReset();setTimeout(()=>{if(!running)$("word").textContent="ready";},2600);}
-function end(){running=false;paused=false;pendingFinish=false;clearAudioInterruption();resetSessionPlan();stage.classList.remove("running");syncResetControl();stopTrackedAudio();stopAmbientBed();setMaster();updateAmbientBed();pauseMediaSink();releaseWakeLock();mediaState(true);$("word").textContent="ready";$("count").textContent="";$("hint").textContent="";restoreFromQuickReset();}
+function togglePause(){
+  if(!running)return;
+  if(!paused){
+    const now=performance.now();
+    intentionalPause=true;settleAudioInterruption(now);paused=true;pauseAt=now;stopTrackedAudio();audioScheduleUntil=now;
+    $("pauseBtn").textContent="▶";setMaster();updateAmbientBed();updateBreathWash();mediaState(true);releaseWakeLock();
+    setTimeout(()=>{if(paused&&actx){pauseMediaSink();try{if(actx.state==="running")actx.suspend();}catch(e){}}},220);
+  }else{
+    const now=performance.now(),g=now-pauseAt;
+    shiftSessionBy(g);clearAudioInterruption();stopTrackedAudio();audioScheduleUntil=now;paused=false;intentionalPause=true;
+    $("pauseBtn").textContent="❚❚";setMaster();setCueBus();startAmbientBed();startBreathWash();updateAmbientBed(0.05);updateBreathWash(0.05);mediaState(true);
+    audioResume().then(ok=>{intentionalPause=false;if(!running||paused)return;if(ok&&!audioIsBlocked())scheduleAudioAhead();else{markAudioInterrupted();scheduleAudioRecovery(1200);}}).catch(()=>{intentionalPause=false;markAudioInterrupted();scheduleAudioRecovery(1200);});
+    acquireWakeLock();
+  }
+}
+function finish(){running=false;paused=false;pendingFinish=false;intentionalPause=false;clearAudioInterruption();resetSessionPlan();stage.classList.remove("running");syncResetControl();stopTrackedAudio();stopBreathWash();stopAmbientBed();setMaster();updateAmbientBed();pauseMediaSink();releaseWakeLock();mediaState(true);$("word").textContent="complete";$("count").textContent="";$("hint").textContent="";restoreFromQuickReset();setTimeout(()=>{if(!running)$("word").textContent="ready";},2600);}
+function end(){running=false;paused=false;pendingFinish=false;intentionalPause=false;clearAudioInterruption();resetSessionPlan();stage.classList.remove("running");syncResetControl();stopTrackedAudio();stopBreathWash();stopAmbientBed();setMaster();updateAmbientBed();pauseMediaSink();releaseWakeLock();mediaState(true);$("word").textContent="ready";$("count").textContent="";$("hint").textContent="";restoreFromQuickReset();}
 
 /* ---------- breath signal ---------- */
 function computeOpen(now){
@@ -527,9 +578,9 @@ let rafId=0,lastMedia=0,lastIdleDraw=0;
 function samplePerformance(now){
   if(!lastFrameSample){lastFrameSample=now;return;}
   const dt=now-lastFrameSample;lastFrameSample=now;
-  if(visualMode!=="full"||document.hidden||now<visualAutoQuietUntil){slowFrameMs=0;return;}
-  slowFrameMs=dt>32?slowFrameMs+dt:Math.max(0,slowFrameMs-dt*.7);
-  if(slowFrameMs>9000){slowFrameMs=0;visualAutoQuietUntil=now+60000;setVisualMode("minimal",true);}
+  lastSlowFrameMs=dt;
+  /* Auto-downgrade is intentionally disabled: slow devices may stutter, but
+     user-selected Full visuals should never silently simplify or disappear. */
 }
 function frame(now){
   if(!lastNow)lastNow=now;
@@ -540,13 +591,14 @@ function frame(now){
   if(running){Mandala.draw(now/1000,breathOpen);lastIdleDraw=now;}
   else if(now-lastIdleDraw>1200){Mandala.draw(now/1000,breathOpen);lastIdleDraw=now;}
   updateBreathPad();
+  updateBreathWash();
   if(running&&now-lastMedia>500){lastMedia=now;mediaState();}
   prevOpen=breathOpen;rafId=requestAnimationFrame(frame);
 }
 function startBackgroundTicker(){if(bgTimer)return;bgTimer=setInterval(()=>{const now=performance.now();advancePhase(now);updateSessionClock(now);scheduleAudioAhead();if(running&&now-lastMedia>1000){lastMedia=now;mediaState();}},1000);}
 function stopBackgroundTicker(){if(bgTimer){clearInterval(bgTimer);bgTimer=0;}}
 /* stop rendering when backgrounded/locked to save battery; resume cleanly */
-document.addEventListener("visibilitychange",()=>{if(document.hidden){cancelAnimationFrame(rafId);startBackgroundTicker();releaseWakeLock();}else{stopBackgroundTicker();lastNow=0;lastFrameSample=0;visualAutoQuietUntil=performance.now()+6000;setAudioSessionPlayback();if(running&&!paused){if(audioInterrupted)scheduleAudioRecovery(0);else audioResume().then(ok=>{if(ok)scheduleAudioAhead();else{markAudioInterrupted();scheduleAudioRecovery(1200);}});acquireWakeLock();mediaState(true);}cancelAnimationFrame(rafId);rafId=requestAnimationFrame(frame);}});
+document.addEventListener("visibilitychange",()=>{if(document.hidden){cancelAnimationFrame(rafId);startBackgroundTicker();releaseWakeLock();}else{stopBackgroundTicker();lastNow=0;lastFrameSample=0;setAudioSessionPlayback();if(running&&!paused){if(audioInterrupted)scheduleAudioRecovery(0);else audioResume().then(ok=>{if(ok)scheduleAudioAhead();else{markAudioInterrupted();scheduleAudioRecovery(1200);}});acquireWakeLock();mediaState(true);}cancelAnimationFrame(rafId);rafId=requestAnimationFrame(frame);}});
 
 /* ---------- sacred-geometry mandalas (breath-driven, subtle) ---------- */
 const Mandala=(()=>{
@@ -612,7 +664,7 @@ $("begin").onclick=()=>{if(needsSafetyGate()){openSafetyGate();return;}start();}
 $("gateGo").onclick=()=>{if(activeGateMode!=="holotropicAlways")safetyOK=true;$("gate").classList.remove("on");start();activeGateMode=null;};
 $("gateBack").onclick=()=>{$("gate").classList.remove("on");activeGateMode=null;};
 $("pauseBtn").onclick=togglePause;$("endBtn").onclick=end;
-$("soundTg").onclick=()=>{soundOn=!soundOn;writeStore(STORE.sound,String(soundOn));$("soundTg").setAttribute("aria-pressed",soundOn);if(audioInterrupted)scheduleAudioRecovery(0);else audioResume();setCueBus();updateAmbientBed();if(soundOn){audioScheduleUntil=performance.now();scheduleAudioAhead();}else stopTrackedAudio();};
+$("soundTg").onclick=()=>{soundOn=!soundOn;writeStore(STORE.sound,String(soundOn));$("soundTg").setAttribute("aria-pressed",soundOn);if(audioInterrupted)scheduleAudioRecovery(0);else audioResume();setCueBus();updateAmbientBed();updateBreathWash();if(soundOn){audioScheduleUntil=performance.now();scheduleAudioAhead();}else stopTrackedAudio();};
 function startQuickReset(){if(running)return;const resetPat=CATS.calm.patterns.find(p=>p.id==="extendedexhale");if(!resetPat)return;quickResetState={cat,pat,durMin};wasQuickReset=true;cat="calm";pat=resetPat;durMin=1.5;paintCat();setPname();start();$("hint").textContent="ribs down — let the belly go soft";}
 $("resetTg").onclick=startQuickReset;
 function openSettings(){$("settingsSheet").classList.add("on");$("settingsSheet").setAttribute("aria-hidden","false");}
@@ -624,7 +676,7 @@ addEventListener("keydown",e=>{if(e.key==="Escape")closeSettings();});
 $("orb").parentElement.addEventListener("click",()=>{if(running)stage.classList.toggle("dim");});
 
 $("soundTg").setAttribute("aria-pressed",soundOn);
-resize();paintCat();buildTabs();buildChips();buildDur();buildAmbient();buildVisuals();setPname();syncResetControl();installInterruptionHandlers();mediaSetup();mediaState(true);visualAutoQuietUntil=performance.now()+8000;rafId=requestAnimationFrame(frame);
+resize();paintCat();buildTabs();buildChips();buildDur();buildAmbient();buildVisuals();setPname();syncResetControl();installInterruptionHandlers();mediaSetup();mediaState(true);rafId=requestAnimationFrame(frame);
 </script>
 </body>
 </html>
