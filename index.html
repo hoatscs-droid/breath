@@ -37,10 +37,10 @@
   .eyebrow .tag{margin-top:7px;font-size:14px;color:rgba(232,234,255,.46);font-style:italic;font-family:"Iowan Old Style",Palatino,Georgia,serif}
   #stage[data-cat="holotropic"] .eyebrow .cat{letter-spacing:.34em}
   .toggles{position:absolute;right:16px;top:max(22px,env(safe-area-inset-top));display:flex;gap:8px;z-index:6}
-  .tg{position:relative;width:44px;height:44px;border-radius:50%;border:1px solid var(--hair);background:rgba(220,224,255,.04);color:rgba(232,234,255,.55);font-size:15px;cursor:pointer;display:grid;place-items:center;transition:all .3s var(--ease)}
+  .tg{position:relative;width:44px;height:44px;min-width:44px;flex:0 0 44px;border-radius:50%;border:1px solid var(--hair);background:rgba(220,224,255,.04);color:rgba(232,234,255,.55);font-size:15px;cursor:pointer;display:grid;place-items:center;transition:background .3s var(--ease),border-color .3s var(--ease),color .3s var(--ease),opacity .3s var(--ease)}
   .tg[hidden]{display:none}
   .tg:disabled{cursor:default;opacity:.38}
-  .tg[aria-pressed="true"]{color:#0c0f1b;background:var(--body);border-color:transparent}
+  .tg[aria-pressed="true"]{width:44px;height:44px;color:#0c0f1b;background:var(--body);border-color:transparent}
 
   .orbwrap{flex:1;position:relative;display:flex;align-items:center;justify-content:center;z-index:2;transform:translateY(var(--orb-idle-y));transition:transform .7s var(--ease);will-change:transform}
   .orb{position:relative;width:min(52vw,248px);aspect-ratio:1;border-radius:50%;transform:scale(.6);will-change:transform;background:radial-gradient(circle at 36% 32%, var(--core) 0%, var(--body) 42%, var(--rim) 82%, #05030f 100%);box-shadow:inset -12px -16px 40px rgba(0,0,0,.5), inset 9px 11px 26px rgba(255,255,255,.12)}
@@ -114,10 +114,6 @@
   .sheet-close{position:relative;width:44px;height:44px;border-radius:50%;border:1px solid var(--hair);background:transparent;color:rgba(232,234,255,.7);font-size:18px;line-height:1;cursor:pointer}
 
   @media (prefers-reduced-motion: reduce){.orb::after{animation:none}}
-  @media (max-width:360px){
-    .tabs{gap:5px}
-    .tab{font-size:8.5px;letter-spacing:.035em}
-  }
   @media (max-height:760px){
     #stage{--orb-idle-y:12px}
     .eyebrow{transform:translateY(clamp(42px,7dvh,58px))}
@@ -126,6 +122,26 @@
     .panel{padding:0 20px calc(12px + env(safe-area-inset-bottom))}
     .pname{margin-bottom:6px}.how{font-size:11.5px;line-height:1.38;margin-bottom:5px}.note{font-size:9.8px;line-height:1.28;margin-bottom:9px}
     .tabs{margin-bottom:9px}.chips{margin-bottom:9px}.chip{padding:7px 12px}.row{margin-bottom:10px}.begin{padding:13px}
+  }
+  @media (max-width:480px){
+    .tabs{gap:5px;margin-bottom:10px}
+    .tab{max-width:none;padding:8px 0;font-size:9px;letter-spacing:.055em}
+    .pname{margin-bottom:7px}
+    .how{font-size:11.5px;line-height:1.42;margin-bottom:5px;max-width:330px}
+    .note{font-size:10px;line-height:1.32;margin-bottom:10px;max-width:320px}
+    .chips{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;max-width:342px;margin:0 auto 11px}
+    .chip{width:100%;min-width:0;padding:7px 8px;border-radius:10px}
+    .chip .n{font-size:12px;white-space:nowrap}
+    .chip .d{font-size:9.2px;margin-top:1px}
+    .row{gap:8px;margin-bottom:12px}
+    .row .lab{font-size:9.5px}
+    .dur button{min-width:40px}
+  }
+  @media (max-width:360px){
+    .tabs{gap:4px}
+    .tab{font-size:8.3px;letter-spacing:.03em}
+    .chips{gap:6px}
+    .chip .n{font-size:11.5px}
   }
 </style>
 </head>
