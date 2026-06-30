@@ -249,7 +249,7 @@ let pendingFinish=false,roundCount=1;
 let cycleMs=0,cyclesTotal=Infinity,plannedEndMs=Infinity;
 let breathOpen=0,prevOpen=0,prevDir=0,idleT=0,lastNow=0;
 const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
-let audioScheduleUntil=0,bgTimer=0,wakeLock=null,lastFrameSample=0,lastSlowFrameMs=0;
+let audioScheduleUntil=0,bgTimer=0,wakeLock=null;
 let audioInterrupted=false,interruptionAt=0,recoverTimer=0,audioResumeBusy=false,mediaPauseGuard=0,intentionalPause=false;
 let soundOn=readBool(STORE.sound,true),ambientOn=readBool(STORE.ambient,true);
 let wasQuickReset=false,quickResetState=null;
@@ -319,9 +319,16 @@ let actx=null,master=null,cueBus=null,mediaDest=null,directOut=false,_noise=null
 const trackedSources=new Set();
 const AMBIENT_FLOOR=0.001;
 const AUDIO_SCHEDULE_AHEAD=25000;
+const BREATH_WASH={
+  pitchInterval:1.5,toneGain:0.42,toneDetune:5,lullDepth:0.45,
+  pitchPortamento:0.18,filterPortamento:0.22,gainPortamento:0.18,
+  base:270,span:1380,gain:0.058,floor:0.008,
+  inhaleLift:340,exhaleDip:160,exhaleBoost:0.012,
+  hpIn:160,hpOut:82,qIn:0.68,qOut:0.38
+};
 const AMBIENT={
-  calm:{freq:[49,98,146.83,196,293.66],gains:[.12,.14,.075,.045,.024],filter:620,gain:0.026,lfo:0.045,depth:80,slowLfo:0.008,slowDepth:46,drift:0.006,detuneDepth:2.4,wash:{base:260,span:1420,gain:0.054,floor:0.009,inhaleLift:360,exhaleDip:170,exhaleBoost:0.016,hpIn:165,hpOut:82,qIn:0.72,qOut:0.38}},
-  intimacy:{freq:[61.74,123.47,185,246.94,370],gains:[.11,.13,.07,.044,.022],filter:760,gain:0.024,lfo:0.038,depth:95,slowLfo:0.007,slowDepth:54,drift:0.005,detuneDepth:2.8,wash:{base:290,span:1320,gain:0.052,floor:0.009,inhaleLift:320,exhaleDip:150,exhaleBoost:0.014,hpIn:155,hpOut:78,qIn:0.66,qOut:0.36}},
+  calm:{freq:[49,98,146.83,196,293.66],gains:[.12,.14,.075,.045,.024],filter:620,gain:0.026,lfo:0.045,depth:80,slowLfo:0.008,slowDepth:46,drift:0.006,detuneDepth:2.4,washColor:{brightness:1,grain:1,tone:1}},
+  intimacy:{freq:[61.74,123.47,185,246.94,370],gains:[.11,.13,.07,.044,.022],filter:760,gain:0.024,lfo:0.038,depth:95,slowLfo:0.007,slowDepth:54,drift:0.005,detuneDepth:2.8,washColor:{brightness:.94,grain:.95,tone:.92}},
   energy:{freq:[65.41,130.81,196,261.63,392],gains:[.08,.11,.06,.038,.018],filter:980,gain:0.018,lfo:0.055,depth:120,slowLfo:0.011,slowDepth:60,drift:0.009,detuneDepth:2.2},
   holotropic:{freq:[41.2,82.41,123.47,185,246.94],gains:[.11,.13,.07,.044,.022],filter:720,gain:0.023,lfo:0.032,depth:140,slowLfo:0.006,slowDepth:70,drift:0.004,detuneDepth:3.2}
 };
@@ -411,39 +418,53 @@ function trackSource(src){trackedSources.add(src);const ended=src.onended;src.on
 function stopTrackedAudio(){if(!actx)return;const t=actx.currentTime;trackedSources.forEach(src=>{try{src.stop(t+0.01);}catch(e){}});trackedSources.clear();audioScheduleUntil=0;}
 function noiseBuf(){if(_noise)return _noise;const len=Math.floor(actx.sampleRate*2);_noise=actx.createBuffer(1,len,actx.sampleRate);const d=_noise.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;return _noise;}
 function usesSeamlessWash(){return cat==="calm"||cat==="intimacy";}
+function washColor(){const c=(AMBIENT[cat]&&AMBIENT[cat].washColor)||{};return {brightness:c.brightness==null?1:c.brightness,grain:c.grain==null?1:c.grain,tone:c.tone==null?1:c.tone};}
+function droneRoot(){return ((AMBIENT[cat]&&AMBIENT[cat].freq&&AMBIENT[cat].freq[0])||49);}
 function startBreathWash(){
   if(!actx||breathWash||!usesSeamlessWash())return;
-  const cfg=AMBIENT[cat],washCfg=cfg.wash||AMBIENT.calm.wash,src=actx.createBufferSource(),hp=actx.createBiquadFilter(),lp=actx.createBiquadFilter(),gain=actx.createGain();
-  src.buffer=noiseBuf();src.loop=true;hp.type="highpass";hp.frequency.value=washCfg.hpOut||100;lp.type="lowpass";lp.Q.value=washCfg.qOut||0.4;lp.frequency.value=washCfg.base;gain.gain.value=0;
-  src.connect(hp).connect(lp).connect(gain).connect(cueBus);src.start();
-  breathWash={src,hp,filter:lp,gain};updateBreathWash(0.05);
+  const cfg=AMBIENT[cat],color=washColor(),root=cfg.freq[0],tonic=root*4,src=actx.createBufferSource(),hp=actx.createBiquadFilter(),lp=actx.createBiquadFilter(),noiseGain=actx.createGain(),toneA=actx.createOscillator(),toneB=actx.createOscillator(),toneFilter=actx.createBiquadFilter(),toneGain=actx.createGain(),mix=actx.createGain();
+  src.buffer=noiseBuf();src.loop=true;hp.type="highpass";hp.frequency.value=BREATH_WASH.hpOut;lp.type="lowpass";lp.Q.value=BREATH_WASH.qOut;lp.frequency.value=BREATH_WASH.base*color.brightness;noiseGain.gain.value=1;
+  toneA.type="sine";toneB.type="sine";toneA.frequency.value=tonic;toneB.frequency.value=tonic;toneB.detune.value=BREATH_WASH.toneDetune;toneFilter.type="lowpass";toneFilter.Q.value=0.35;toneFilter.frequency.value=tonic*4;toneGain.gain.value=BREATH_WASH.toneGain*color.tone;mix.gain.value=0;
+  src.connect(hp).connect(lp).connect(noiseGain).connect(mix);toneA.connect(toneFilter);toneB.connect(toneFilter);toneFilter.connect(toneGain).connect(mix);mix.connect(cueBus);
+  src.start();toneA.start();toneB.start();
+  breathWash={src,hp,filter:lp,noiseGain,toneA,toneB,toneFilter,toneGain,mix,root};updateBreathWash(0.05);
 }
 function stopBreathWash(){
   if(!breathWash||!actx)return;
-  const old=breathWash,t=actx.currentTime;old.gain.gain.cancelScheduledValues(t);old.gain.gain.setValueAtTime(Math.max(0.00001,old.gain.gain.value),t);old.gain.gain.linearRampToValueAtTime(0.00001,t+0.25);
+  const old=breathWash,t=actx.currentTime;breathWash=null;old.mix.gain.cancelScheduledValues(t);old.mix.gain.setValueAtTime(Math.max(0.00001,old.mix.gain.value),t);old.mix.gain.linearRampToValueAtTime(0.00001,t+0.25);
   try{old.src.stop(t+0.32);}catch(e){}
-  setTimeout(()=>{try{old.src.disconnect();old.hp.disconnect();old.filter.disconnect();old.gain.disconnect();}catch(e){}if(breathWash===old)breathWash=null;},460);
+  try{old.toneA.stop(t+0.32);}catch(e){}
+  try{old.toneB.stop(t+0.32);}catch(e){}
+  setTimeout(()=>{try{old.src.disconnect();old.hp.disconnect();old.filter.disconnect();old.noiseGain.disconnect();old.toneA.disconnect();old.toneB.disconnect();old.toneFilter.disconnect();old.toneGain.disconnect();old.mix.disconnect();}catch(e){}if(breathWash===old)breathWash=null;},460);
 }
 function updateBreathWash(fade){
   if(!actx||!breathWash)return;
-  const cfg=AMBIENT[cat],washCfg=(cfg&&cfg.wash)||AMBIENT.calm.wash,t=actx.currentTime;
+  const cfg=AMBIENT[cat],color=washColor(),t=actx.currentTime;
   if(!running||paused||audioInterrupted||!usesSeamlessWash()){
-    breathWash.gain.gain.cancelScheduledValues(t);breathWash.gain.gain.setTargetAtTime(0.00001,t,fade||0.18);return;
+    breathWash.mix.gain.cancelScheduledValues(t);breathWash.mix.gain.setTargetAtTime(0.00001,t,fade||BREATH_WASH.gainPortamento);return;
   }
   const phase=phases[pIdx]&&phases[pIdx][0],open=phase==="rest"?0.12:breathOpen;
   const rising=phase==="in"||prevDir>0.0007,falling=phase==="out"||prevDir<-0.0007;
   const dur=(phases[pIdx]&&phases[pIdx][1])||1,prog=Math.max(0,Math.min(1,(performance.now()-pStart)/(dur*1000)));
+  const [lo,hi]=pat.range||[.58,.98],norm=Math.max(0,Math.min(1,(open-lo)/(hi-lo||1)));
+  const tonic=cfg.freq[0]*4,fifth=tonic*BREATH_WASH.pitchInterval,targetPitch=tonic+(fifth-tonic)*norm;
+  const swell=(1-BREATH_WASH.lullDepth)+BREATH_WASH.lullDepth*Math.sin(Math.PI*prog);
   const exhaleRelease=falling?Math.max(0,1-prog):0;
-  const targetGain=soundOn?washCfg.floor+washCfg.gain*(0.2+open*0.8)+(washCfg.exhaleBoost||0)*exhaleRelease*(0.45+open*0.55):0.00001;
-  const targetCutoff=washCfg.base+washCfg.span*Math.max(0,Math.min(1,open))+(rising?(washCfg.inhaleLift||0):0)-(falling?(washCfg.exhaleDip||0)*(0.45+0.55*(1-open)):0);
-  const targetHighpass=rising?(washCfg.hpIn||150):(falling?(washCfg.hpOut||85):115);
-  const targetQ=rising?(washCfg.qIn||0.65):(falling?(washCfg.qOut||0.38):0.45);
+  const baseGain=(BREATH_WASH.floor+BREATH_WASH.gain*(0.28+norm*0.72)+(BREATH_WASH.exhaleBoost*exhaleRelease*(0.45+norm*0.55)))*color.grain;
+  const targetGain=soundOn?baseGain*swell:0.00001;
+  const targetCutoff=(BREATH_WASH.base+BREATH_WASH.span*norm)*color.brightness+(rising?BREATH_WASH.inhaleLift:0)-(falling?BREATH_WASH.exhaleDip*(0.45+0.55*(1-norm)):0);
+  const targetHighpass=rising?BREATH_WASH.hpIn:(falling?BREATH_WASH.hpOut:115);
+  const targetQ=rising?BREATH_WASH.qIn:(falling?BREATH_WASH.qOut:0.45);
   /* During iOS lock, requestAnimationFrame pauses, so this continuous wash holds
      its last calm level instead of phase-pulsing; the hidden audio keeps it alive. */
-  breathWash.filter.frequency.setTargetAtTime(targetCutoff,t,0.22);
-  breathWash.filter.Q.setTargetAtTime(targetQ,t,0.22);
-  breathWash.hp.frequency.setTargetAtTime(targetHighpass,t,0.22);
-  breathWash.gain.gain.setTargetAtTime(targetGain,t,fade||0.18);
+  breathWash.filter.frequency.setTargetAtTime(targetCutoff,t,BREATH_WASH.filterPortamento);
+  breathWash.filter.Q.setTargetAtTime(targetQ,t,BREATH_WASH.filterPortamento);
+  breathWash.hp.frequency.setTargetAtTime(targetHighpass,t,BREATH_WASH.filterPortamento);
+  breathWash.toneA.frequency.setTargetAtTime(targetPitch,t,BREATH_WASH.pitchPortamento);
+  breathWash.toneB.frequency.setTargetAtTime(targetPitch,t,BREATH_WASH.pitchPortamento);
+  breathWash.toneFilter.frequency.setTargetAtTime(Math.max(700,targetPitch*4),t,BREATH_WASH.filterPortamento);
+  breathWash.toneGain.gain.setTargetAtTime(BREATH_WASH.toneGain*color.tone,t,0.3);
+  breathWash.mix.gain.setTargetAtTime(targetGain,t,fade||BREATH_WASH.gainPortamento);
 }
 /* ocean wash: kind 'in' = tide drawing back, kind 'out' = wave washing up then receding */
 function wash(dur,kind,when){if(!actx||!cueBus)return;const t=Math.max(actx.currentTime+0.015,when||actx.currentTime);
@@ -462,14 +483,14 @@ function wash(dur,kind,when){if(!actx||!cueBus)return;const t=Math.max(actx.curr
   src.start(t);src.stop(t+dur+0.05);
 }
 /* warm marimba-like pluck for each hold beat */
-const MNOTES=[523.25,587.33,659.25,698.46,783.99];
-function marimba(when,idx){if(!actx)return;const f=MNOTES[Math.min(idx,MNOTES.length-1)];
+const MNOTE_RATIOS=[8,9,10,12,15];
+function marimba(when,idx){if(!actx)return;const f=droneRoot()*MNOTE_RATIOS[Math.min(idx,MNOTE_RATIOS.length-1)];
   const o=trackSource(actx.createOscillator()),o2=trackSource(actx.createOscillator()),g=actx.createGain(),g2=actx.createGain();
   o.type="sine";o.frequency.value=f;o2.type="sine";o2.frequency.value=f*4;g2.gain.value=0.09;
   g.gain.setValueAtTime(0,when);g.gain.linearRampToValueAtTime(0.075,when+0.008);g.gain.exponentialRampToValueAtTime(0.0004,when+0.55);
   o.connect(g).connect(cueBus);o2.connect(g2).connect(g);o.start(when);o2.start(when);o.stop(when+0.6);o2.stop(when+0.6);}
 function holdCue(dur,when){if(!actx)return;const n=Math.min(12,Math.floor(dur));for(let s=0;s<n;s++)marimba((when||actx.currentTime)+s+0.02,s);}
-function bowl(when){if(!actx||!cueBus)return;const t=Math.max(actx.currentTime+0.015,when||actx.currentTime),o=trackSource(actx.createOscillator()),o2=trackSource(actx.createOscillator()),g=actx.createGain(),g2=actx.createGain();o.type="sine";o.frequency.value=110;o2.type="sine";o2.frequency.value=165;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(0.095,t+0.035);g.gain.exponentialRampToValueAtTime(0.0008,t+3.2);g2.gain.value=0.28;o.connect(g).connect(cueBus);o2.connect(g2).connect(g);o.start(t);o2.start(t);o.stop(t+3.4);o2.stop(t+3.4);}
+function bowl(when){if(!actx||!cueBus)return;const t=Math.max(actx.currentTime+0.015,when||actx.currentTime),root=droneRoot(),o=trackSource(actx.createOscillator()),o2=trackSource(actx.createOscillator()),g=actx.createGain(),g2=actx.createGain();o.type="sine";o.frequency.value=root*2;o2.type="sine";o2.frequency.value=root*3;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(0.095,t+0.035);g.gain.exponentialRampToValueAtTime(0.0008,t+3.2);g2.gain.value=0.28;o.connect(g).connect(cueBus);o2.connect(g2).connect(g);o.start(t);o2.start(t);o.stop(t+3.4);o2.stop(t+3.4);}
 function playPhaseCue(type,dur,when,idx){
   if(usesSeamlessWash()){if(type==="rest")bowl(when);else if(type!=="in"&&type!=="out")holdCue(dur,when);return;}
   if(pat.padAudio){if(type==="rest"||idx===0)bowl(when);return;}
@@ -485,7 +506,7 @@ function startAmbientBed(){
 }
 function stopAmbientBed(){
   if(!ambient||!actx)return;
-  const old=ambient,t=actx.currentTime;old.gain.gain.cancelScheduledValues(t);old.gain.gain.setValueAtTime(old.gain.gain.value,t);old.gain.gain.linearRampToValueAtTime(0,t+0.35);
+  const old=ambient,t=actx.currentTime;ambient=null;old.gain.gain.cancelScheduledValues(t);old.gain.gain.setValueAtTime(old.gain.gain.value,t);old.gain.gain.linearRampToValueAtTime(0,t+0.35);
   try{old.lfo.stop(t+0.4);}catch(e){}
   try{old.slow.stop(t+0.4);}catch(e){}
   try{old.drift.stop(t+0.4);}catch(e){}
@@ -625,16 +646,8 @@ function computeOpen(now){
   else{idleT+=Math.min(0.05,(now-(lastNow||now))/1000);const p=9;return 0.62+0.16*(0.5-0.5*Math.cos(2*Math.PI*(idleT%p)/p));}
 }
 let rafId=0,lastMedia=0,lastIdleDraw=0;
-function samplePerformance(now){
-  if(!lastFrameSample){lastFrameSample=now;return;}
-  const dt=now-lastFrameSample;lastFrameSample=now;
-  lastSlowFrameMs=dt;
-  /* Auto-downgrade is intentionally disabled: slow devices may stutter, but
-     user-selected Full visuals should never silently simplify or disappear. */
-}
 function frame(now){
   if(!lastNow)lastNow=now;
-  samplePerformance(now);
   breathOpen=computeOpen(now);lastNow=now;
   prevDir=breathOpen-prevOpen;
   orb.style.transform="scale("+breathOpen.toFixed(4)+")";
@@ -648,7 +661,7 @@ function frame(now){
 function startBackgroundTicker(){if(bgTimer)return;bgTimer=setInterval(()=>{const now=performance.now();advancePhase(now);updateSessionClock(now);scheduleAudioAhead();if(running&&now-lastMedia>1000){lastMedia=now;mediaState();}},1000);}
 function stopBackgroundTicker(){if(bgTimer){clearInterval(bgTimer);bgTimer=0;}}
 /* stop rendering when backgrounded/locked to save battery; resume cleanly */
-document.addEventListener("visibilitychange",()=>{if(document.hidden){cancelAnimationFrame(rafId);startBackgroundTicker();releaseWakeLock();}else{stopBackgroundTicker();lastNow=0;lastFrameSample=0;setAudioSessionPlayback();if(running&&!paused){if(audioInterrupted)scheduleAudioRecovery(0);else audioResume().then(ok=>{if(ok)scheduleAudioAhead();else{markAudioInterrupted();scheduleAudioRecovery(1200);}});acquireWakeLock();mediaState(true);}cancelAnimationFrame(rafId);rafId=requestAnimationFrame(frame);}});
+document.addEventListener("visibilitychange",()=>{if(document.hidden){cancelAnimationFrame(rafId);startBackgroundTicker();releaseWakeLock();}else{stopBackgroundTicker();lastNow=0;setAudioSessionPlayback();if(running&&!paused){if(audioInterrupted)scheduleAudioRecovery(0);else audioResume().then(ok=>{if(ok)scheduleAudioAhead();else{markAudioInterrupted();scheduleAudioRecovery(1200);}});acquireWakeLock();mediaState(true);}cancelAnimationFrame(rafId);rafId=requestAnimationFrame(frame);}});
 
 /* ---------- sacred-geometry mandalas (breath-driven, subtle) ---------- */
 const Mandala=(()=>{
