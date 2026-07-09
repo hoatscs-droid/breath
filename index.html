@@ -224,6 +224,7 @@ const CATS={
     note:"A traditional practice, valued experientially more than it has been clinically studied.",
     vars:{"--bg-0":"#160611","--bg-1":"#0c0308","--core":"#ffd6e6","--body":"#ff5c9a","--rim":"#5e1238","--glow":"#e0408f","--text":"#ffdfec","--eyebrow":"#e293b8"},
     patterns:[
+      {id:"together",n:"Together",d:"5 · 7, for two",intro:"together",how:"A slow shared rhythm for two. Set the phone where you can both see the orb, breathe with it together, and if Voice is on in settings, hum the exhale together.",ph:[["in",5],["out",7]],cues:{in:["breathe in together"],out:["let it go together","long and unhurried"]}},
       {id:"circular",n:"Circular",d:"5 · 5, no holds",how:"Breathe in one continuous circle, with no pause where the in-breath meets the out-breath. Let each flow into the next to keep energy moving and present, alone or with a partner.",ph:[["in",5],["out",5]]},
       {id:"openheart",n:"Open Heart",d:"4 · 6, no holds",how:"Let your jaw soften and take the breath in fully and easily, then let it fall out on a quiet sigh. Open and relaxed rather than effortful.",ph:[["in",4],["out",6]]},
       {id:"grounding",n:"Grounding",d:"5 · 6, no holds",how:"Keep the belly soft and let it widen low with each breath in, settling as you breathe out. A gentle way to drop out of doing and into simply being.",ph:[["in",5],["out",6]]}]},
@@ -311,8 +312,8 @@ addEventListener("resize",resize);addEventListener("orientationchange",handleOri
 /* ---------- controls ---------- */
 function paintCat(){const c=CATS[cat];Object.entries(c.vars).forEach(([k,v])=>stage.style.setProperty(k,v));stage.dataset.cat=cat;$("ebCat").textContent=c.label;$("ebTag").textContent=c.tag;refreshInfo();updateAmbientTone();syncVoiceRows();syncPaceRow();if(!voiceAvailable()&&humVoice)stopHumVoice();}
 function refreshInfo(){$("how").textContent=pat.how||"";$("note").textContent=CATS[cat].note;}
-function buildTabs(){const t=$("tabs");t.innerHTML="";Object.keys(CATS).forEach(k=>{const b=document.createElement("button");b.className="tab";b.textContent=CATS[k].label;b.setAttribute("role","tab");b.setAttribute("aria-selected",k===cat);b.onclick=()=>{cat=k;pat=CATS[k].patterns[0];safetyOK=false;ensureDurAllowed();paintCat();buildTabs();buildChips();buildDur();setPname();};t.appendChild(b);});}
-function buildChips(){const c=$("chips");c.innerHTML="";CATS[cat].patterns.forEach(p=>{const b=document.createElement("button");b.className="chip";b.setAttribute("aria-pressed",p.id===pat.id);b.innerHTML='<span class="n">'+p.n+'</span><span class="d">'+p.d+'</span>';b.onclick=()=>{pat=p;safetyOK=false;ensureDurAllowed();buildChips();buildDur();setPname();refreshInfo();};c.appendChild(b);});}
+function buildTabs(){const t=$("tabs");t.innerHTML="";Object.keys(CATS).forEach(k=>{const b=document.createElement("button");b.className="tab";b.textContent=CATS[k].label;b.setAttribute("role","tab");b.setAttribute("aria-selected",k===cat);b.onclick=()=>{cat=k;pat=CATS[k].patterns[0];safetyOK=false;introOK=false;ensureDurAllowed();paintCat();buildTabs();buildChips();buildDur();setPname();};t.appendChild(b);});}
+function buildChips(){const c=$("chips");c.innerHTML="";CATS[cat].patterns.forEach(p=>{const b=document.createElement("button");b.className="chip";b.setAttribute("aria-pressed",p.id===pat.id);b.innerHTML='<span class="n">'+p.n+'</span><span class="d">'+p.d+'</span>';b.onclick=()=>{pat=p;safetyOK=false;introOK=false;ensureDurAllowed();buildChips();buildDur();setPname();refreshInfo();};c.appendChild(b);});}
 function durChoices(){let ds=pat.maxMin===8?[3,5,8,"inf"]:DURS.slice();return ds.filter(v=>!(v==="inf"&&pat.noInf)&&(v==="inf"||!pat.maxMin||v<=pat.maxMin));}
 function ensureDurAllowed(){const ds=durChoices();if(ds.some(v=>(v==="inf"&&durMin==="inf")||v===durMin))return;if(typeof durMin==="number"&&isFinite(durMin)&&durMin>=1&&(!pat.maxMin||durMin<=pat.maxMin))return;const nums=ds.filter(v=>v!=="inf");durMin=nums[nums.length-1]||ds[0];}
 function buildDur(){ensureDurAllowed();const d=$("dur");d.innerHTML="";const ds=durChoices();ds.forEach(v=>{const b=document.createElement("button");if(v==="inf")b.innerHTML='<span class="inf">∞</span>';else b.textContent=v;b.setAttribute("aria-pressed",(v==="inf"&&durMin==="inf")||v===durMin);b.onclick=()=>{durMin=v;buildDur();};d.appendChild(b);});
@@ -336,9 +337,12 @@ function setPname(){$("pname").innerHTML='<b>'+pat.n+'</b> &nbsp;·&nbsp; '+pat.
 function rebuildSetupPanel(){paintCat();buildTabs();buildChips();buildDur();setPname();refreshInfo();}
 const GATE_COPY={
   energy:{title:"Before you begin",body:"Activating practices use fast breathing and breath holds. They can make you lightheaded.",items:["Sit or lie down, never in or near water, or while driving or standing.","Stop if you feel dizzy, faint, or short of breath. That feeling is the signal to rest.","Skip these if you are pregnant, or have cardiovascular, respiratory, or seizure conditions."],go:"I understand, begin"},
+  together:{title:"Breathing together",body:"A slow, shared rhythm for two people and one screen.",items:["Set the phone where you can both see the orb. Sit facing each other, close enough to hear each other breathe.","Breathe with the orb rather than with each other. The orb keeps you both on one rhythm.","If Voice is on in settings, hum the exhale together. Unison humming is the oldest form of this practice.","Researchers have observed that breathing in unison tends to draw people's heart rhythms into a shared pattern (Vickhoff et al. 2013). Nothing here measures that. Take it as a way to be present with someone."],go:"Begin together"},
   holotropic:{title:"Read before you begin",body:"This is high-ventilation breathing. It can bring on dizziness, tingling, tightness in the hands (harmless and temporary), strong emotions, and in some people, fainting.",items:["Lie down on a soft surface. Never in or near water, never standing, never while driving.","Don't do this if you are pregnant, or have heart, blood-pressure, respiratory, seizure, or eye-pressure conditions.","Skip it if you have a history of psychosis, bipolar, or significant trauma, or take psychiatric medication, unless a doctor has cleared it, intense breathing can surface overwhelming states.","Keep water nearby. The first few times, have someone you trust within earshot.","You're always in control: open your eyes and breathe normally to come back. Stop the moment anything feels wrong."],go:"I've read this, begin"}
 };
-let activeGateMode=null;
+let activeGateMode=null,introOK=false;
+function needsIntro(){return pat.intro==="together"&&!introOK;}
+function openIntroGate(){activeGateMode="together";renderGate("together");$("gate").classList.add("on");}
 function safetyKind(){return pat.safety||(CATS[cat].safety?"energy":null);}
 function gateMode(kind){return kind==="holotropic"||kind==="holotropicAlways"?"holotropic":"energy";}
 function needsSafetyGate(){const k=safetyKind();if(!k)return false;if(k==="holotropicAlways")return true;return !safetyOK;}
@@ -742,7 +746,7 @@ function fmt(s){s=Math.max(0,Math.floor(s));return String(Math.floor(s/60)).padS
 function cuePhase(type){
   if(type==="in"||type==="inA")vibe(35);else if(type==="sip")vibe(20);else if(type==="out")vibe([0,22,30,22]);else vibe(12);
 }
-function setHint(type){const bits=[];if(pat.rounds)bits.push("Round "+roundCount);if(type==="rest")bits.push("rest and notice");else if(pat.id==="tummo")bits.push(type==="holdF"?"draw the belly in · warmth at your center":type==="in"?"full breath":"soft release");if(pat.cues&&pat.cues[type]&&pat.cues[type].length){const arr=pat.cues[type];const i=(((roundCount-1)%arr.length)+arr.length)%arr.length;bits.push(arr[i]);}if(type==="out"&&voiceAvailable()&&voiceChar!=="off")bits.push("hum softly on the exhale");$("hint").textContent=bits.join(" · ");}
+function setHint(type){const bits=[];if(pat.rounds)bits.push("Round "+roundCount);if(type==="rest")bits.push("rest and notice");else if(pat.id==="tummo")bits.push(type==="holdF"?"draw the belly in · warmth at your center":type==="in"?"full breath":"soft release");if(pat.cues&&pat.cues[type]&&pat.cues[type].length){const arr=pat.cues[type];const i=(((roundCount-1)%arr.length)+arr.length)%arr.length;bits.push(arr[i]);}if(type==="out"&&voiceAvailable()&&voiceChar!=="off")bits.push(pat.id==="together"?"hum the exhale together":"hum softly on the exhale");$("hint").textContent=bits.join(" · ");}
 function showPhase(type,doVibe){$("word").textContent=WORDS[type]||" ";setHint(type);if(doVibe)cuePhase(type);}
 function enterPhase(i,startAt,doVibe){pIdx=i;pStart=startAt||performance.now();const[type]=phases[i];showPhase(type,doVibe!==false);scheduleAudioAhead();}
 function advancePhase(now){
@@ -811,6 +815,7 @@ function start(){
   phases=activePhases();if(!phases.length)return;
   const now=performance.now();
   clearLanding();intentionalPause=false;clearAudioInterruption();
+  qWarm=0;qFrames=0;qAccum=0;qDone=false;
   running=true;paused=false;pendingFinish=false;roundCount=1;sessStart=now;sessionDescent=(paceMode==="descent"&&cat==="calm"&&!pat.rounds);planSession(now);audioScheduleUntil=now;
   syncRunningOrbOffset();stage.classList.add("running");stage.classList.remove("dim");$("pauseBtn").textContent="❚❚";requestAnimationFrame(syncRunningOrbOffset);
   syncResetControl();
@@ -851,9 +856,20 @@ function computeOpen(now){
   else{return breathOpen+(0.7-breathOpen)*0.05;}
 }
 let rafId=0,lastMedia=0,lastIdleDraw=0;
+let qWarm=0,qFrames=0,qAccum=0,qDone=false;
+function sampleQuality(dt){
+  if(qDone||!running||visualMode!=="full"||dt<=0||dt>200)return;
+  if(qWarm++<60)return;
+  qAccum+=dt;qFrames++;
+  if(qFrames<120)return;
+  const avg=qAccum/qFrames;qDone=true;
+  /* below ~38fps sustained: drop to Minimal for this session only, never overwrite the stored preference */
+  if(avg>1000/38){visualMode="minimal";stage.dataset.visual="minimal";buildVisuals();}
+}
 function frame(now){
   if(!lastNow)lastNow=now;
-  breathOpen=computeOpen(now);lastNow=now;
+  const _dt=now-lastNow;
+  breathOpen=computeOpen(now);lastNow=now;sampleQuality(_dt);
   prevDir=breathOpen-prevOpen;
   orb.style.transform="scale("+breathOpen.toFixed(4)+")";
   if(running){Mandala.draw(now/1000,breathOpen);lastIdleDraw=now;}
@@ -874,6 +890,7 @@ document.addEventListener("visibilitychange",()=>{if(document.hidden){if(humVoic
 const Mandala=(()=>{
   const GROUND={calm:["#0a0c20","#05030f"],intimacy:["#1a0814","#0c0308"],energy:["#0e1206","#070803"],holotropic:["#0c0a22","#05030f"]};
   const VIS={
+    together:{type:"twin",rings:3,col:["#ff6ca8","#ff9ec6","#c04cff"],rot:0.02},
     coherent:{type:"rings",sym:12,col:["#5a7cff","#8a6cff","#46c8ff"],rot:0.05},
     box:{type:"flower",col:["#5b6cff","#7b5cff","#46a8ff"],rot:0.03},
     "478":{type:"polygons",sides:6,layers:8,col:["#8a6cff","#b14cff","#5a8cff"],rot:0.06},
@@ -919,20 +936,27 @@ const Mandala=(()=>{
     for(let i=0;i<c.sym;i++){const flick=reduce?1:0.7+0.3*Math.sin(t*3+i*1.7);const len=R*(0.35+0.6*o)*flick;ctx.save();ctx.rotate(i/c.sym*6.2832);ctx.strokeStyle=hex(c.col[i%c.col.length],0.08+0.12*o);ctx.lineWidth=i%3?1:1.6;ctx.beginPath();ctx.moveTo(orbR*0.85,0);ctx.lineTo(len,0);ctx.stroke();ctx.restore();}
     ctx.restore();}
 
+  function twin(c,o,t){const cx=W/2,cy=H*0.5,R=maxR();ctx.save();ctx.translate(cx,cy);ctx.rotate(t*c.rot*motionScale);
+    const gap=R*0.30*(1-o);
+    for(let s=-1;s<=1;s+=2){for(let k=1;k<=c.rings;k++){const rr=orbR*(0.5+k*0.3)*(0.8+0.28*o);
+      ctx.strokeStyle=hex(c.col[k%c.col.length],Math.max(0,(0.05+0.09*o)*(1-k*0.13)));ctx.lineWidth=1.1;
+      ctx.beginPath();ctx.arc(s*gap,0,rr,0,6.2832);ctx.stroke();}}
+    ctx.restore();}
+
   function draw(t,o){
     if(visualMode!=="full")return;
     ctx.clearRect(0,0,W,H);
-    const c=VIS[pat.id];ctx.globalCompositeOperation="lighter";
-    ({rings,flower,polygons,petals,spiral,sunburst}[c.type])(c,o,t);
+    const c=VIS[pat.id]||VIS.coherent;ctx.globalCompositeOperation="lighter";
+    ({rings,flower,polygons,petals,spiral,sunburst,twin}[c.type])(c,o,t);
     ctx.globalCompositeOperation="source-over";
   }
   return {draw};
 })();
 
 /* ---------- wiring ---------- */
-function requestStart(){if(running)return;if(needsSafetyGate()){openSafetyGate();return;}start();}
+function requestStart(){if(running)return;if(needsSafetyGate()){openSafetyGate();return;}if(needsIntro()){openIntroGate();return;}start();}
 $("begin").onclick=requestStart;
-$("gateGo").onclick=()=>{if(activeGateMode!=="holotropicAlways")safetyOK=true;$("gate").classList.remove("on");start();activeGateMode=null;};
+$("gateGo").onclick=()=>{if(activeGateMode==="together")introOK=true;else if(activeGateMode!=="holotropicAlways")safetyOK=true;$("gate").classList.remove("on");start();activeGateMode=null;};
 $("gateBack").onclick=()=>{$("gate").classList.remove("on");activeGateMode=null;};
 $("pauseBtn").onclick=togglePause;$("endBtn").onclick=end;
 $("soundTg").onclick=()=>{soundOn=!soundOn;writeStore(STORE.sound,String(soundOn));$("soundTg").setAttribute("aria-pressed",soundOn);if(audioInterrupted)scheduleAudioRecovery(0);else audioResume();setCueBus();updateAmbientBed();updateActiveBed();updateBreathWash();updateHumVoice();if(soundOn){audioScheduleUntil=performance.now();scheduleAudioAhead();}else stopTrackedAudio();};
