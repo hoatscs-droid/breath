@@ -1,49 +1,61 @@
 # Breath
 
-**A breathwork pacer that runs entirely in your browser. No app store, no account, no tracking.**
+A breathing pacer that runs entirely in your browser. One file, no account, no tracking, nothing to install.
 
-[Try it live](https://hoatscs-droid.github.io/breath/)
+**Live app:** https://hoatscs-droid.github.io/breath/
 
-Breath is a single-file breathing companion for paced sessions. A central orb, procedural geometry, synthesized audio cues, and optional ambient sound all follow the same breath signal so the visual and audio pacing stay aligned.
+Breath paces you through slow and activating breathing practices with a single breathing orb, synthesized sound, and procedural visuals. Everything happens on your device. Nothing you do in the app ever leaves it.
 
-## What it does
+## The practices
 
-- Four practice categories: **Calm**, **Intimacy**, **Energy**, and **Holotropic**.
-- Twelve presets, including timed sessions, round-synced practices, integration rests, and open-ended infinity mode where appropriate.
-- Procedural sacred-geometry visuals defaulting to **Full**, with **Minimal** and **Off** modes available.
-- Synthesized ocean-wash breath cues, hold pips, and a quiet optional ambient bed.
-- Haptic phase cues on browsers that support the Vibration API.
-- Media Session support for compatible browser and lock-screen controls.
-- Activating and high-ventilation practices are protected by in-app safety gates.
+Four spaces, each with its own character and its own honesty note shown in the app:
 
-## Install on iPhone or Android
+- **Calm.** Slow, downshifting practices: Coherent (5.5 · 5.5), Box, 4-7-8, Long Exhale, Diaphragmatic, and the physiological Sigh (a double inhale followed by a long release).
+- **Intimacy.** Soft connective practices such as Circular, Open Heart, and Grounding. Gentle pacing, no holds.
+- **Energy.** Activating practices, including an accurate round-based Tummo (forceful rounds ending in a vase hold).
+- **Holotropic.** Rounds of faster, fuller breathing followed by a still rest. Gated behind a safety screen, with a session length cap.
 
-Breath is a Progressive Web App with a dedicated home-screen icon. To install it:
+## Where the evidence stands
 
-1. Open the live link in Safari on iPhone or Chrome on Android.
-2. Use the browser share/menu button.
-3. Choose **Add to Home Screen** or **Install app**.
+This app makes no health claims. It is a well-made pacing tool, not a medical device or a treatment.
 
-It also runs directly in any modern desktop browser.
+Stated plainly: slow paced breathing, especially with a lengthened exhale, has solid published evidence for raising heart-rate variability and easing acute stress in the moment (Bernardi et al. 2001; Zaccaro et al. 2018; Lehrer and Gevirtz 2014). Five minutes a day of cyclic sighing outperformed mindfulness meditation for mood and respiratory rate in a 2023 controlled trial (Balban et al., Cell Reports Medicine). Tummo's round structure follows Kozhevnikov et al. 2013. Other practices here, particularly in Intimacy, are carried more by tradition and felt experience than by trials, and the app says so where that is the case.
 
-Haptics work where the browser exposes vibration controls, typically Android Chrome. iPhone Safari does not currently expose web haptics, so Breath hides that toggle on unsupported browsers.
+If a practice's evidence is thin, the app tells you. That honesty is the point.
 
-## Privacy
+## Sound
 
-Breath runs entirely on your device. There are no accounts, analytics, servers, or external network requests. Settings are stored only in your browser's local storage.
+Every sound is synthesized live with the Web Audio API. There are no audio files in this repository.
 
-## Safety and scope
+- A breath-tracking wash that swells with the inhale and releases long and soft with the exhale, sagging gently at the tail like a sigh.
+- Holds hush: during breath holds the sound settles toward quiet, because the pause is part of the practice.
+- **Voice.** An optional synthesized voiced exhale (a soft closed-mouth hum, or a more open Om) that swells only on the out-breath, for Calm and Intimacy. Hum along with it.
+- **Ambient beds.** Ocean, Rain, and a deep drone, all generated procedurally, sitting quietly under the practice.
+- Warm fixed-pitch markers count the holds. A soft chime lands the end of a session.
 
-Breath is a pacing tool, not a medical device. It does not diagnose, treat, or promise health outcomes. Activating practices can cause lightheadedness, so the app keeps those behind a safety note and should only be used seated or lying down.
+## Features
 
-## Tech
+- **Guided descent.** An optional pace mode for Calm that eases each breath slightly longer over the session, carrying you down gradually. Coherent's descent is capped so it stays near the well-studied resonance pace.
+- **Clean endings.** Timed sessions are planned to a whole number of breath cycles, so the countdown reaches zero exactly as your final exhale completes, then eases into a short landing rest before letting you go.
+- Tap the orb to begin, pause, and resume. Preset lengths or any custom number of minutes. Infinite mode.
+- Installable as an app (add to home screen on iOS and Android) and works offline.
+- Screen-lock friendly on iOS: audio survives the lock screen, with playback controls and interruption recovery.
+- Haptic cues on Android. iOS Safari has no vibration API, so haptics are Android only.
+- Visual quality settings for older phones.
+- Preferences are stored in localStorage on your device. There are no analytics, no network requests, and no accounts.
 
-A single `index.html` using plain HTML, CSS, JavaScript, Canvas, Web Audio, Media Session, a web app manifest, PNG icons, and local storage. No frameworks, no build step, no dependencies, and no external requests.
+## Safety
+
+Activating practices (Energy, Holotropic) use fast breathing and breath holds, which can cause lightheadedness. The app gates these behind a safety screen. Sit or lie down, never practice in or near water or while driving, stop if you feel faint, and skip these practices if you are pregnant or have cardiovascular, respiratory, or seizure conditions. Nothing in this app is medical advice.
+
+## Engineering
+
+- A single self-contained `index.html`. Vanilla JavaScript, Web Audio, canvas.
+- No frameworks, no build step, no dependencies, no external requests, no bundled assets.
+- Readable top to bottom. Fork it, remix it, learn from it.
 
 ## License
 
-[MIT](LICENSE) - free to use, modify, and build on. No warranty.
+MIT. See [LICENSE](LICENSE).
 
----
-
-Made as a personal project, shared in case others find it useful. Feedback welcome via Issues.
+Inspired by traditional pranayama lineages and by apps like Breathwrk, as inspiration rather than equivalence. Built solo, with care, by [Corbin Hoats](https://github.com/hoatscs-droid).
