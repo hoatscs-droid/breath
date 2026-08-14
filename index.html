@@ -360,7 +360,8 @@ const trackedSources=new Set();
 const NB={};
 const AMBIENT_FLOOR=0.001;
 const AUDIO_SCHEDULE_AHEAD=25000;
-const LOCK_AUDIO_SCHEDULE_AHEAD=10*60*1000;
+const LOCK_AUDIO_SCHEDULE_AHEAD=30*60*1000;
+const KEEPALIVE_SECONDS=15*60;
 const BED_BASE=0.055,BED_DUCK=0.7,LANDING_MS=18000,LANDING_AUDIO_FADE=4;
 /* Tier B audio pass (tunable): exhale weighting curve, sigh-droop depth, hold-hush levels */
 const TIERB={exW:1.45,droop:0.036,hushWash:0.3,hushCut:0.72,hushBed:0.8};
@@ -455,7 +456,7 @@ function recoverAudioInterruption(){
   const now=sessionNow();
   settleAudioInterruption(now);
   audioScheduleUntil=now;setAudioSessionPlayback();setMaster();setCueBus();startSelectedAmbience();updateAmbientBed(0.05);updateActiveBed(0.05);
-  audioResume().then(ok=>{if(!running||paused)return;if(!ok||audioIsBlocked()){markAudioInterrupted();scheduleAudioRecovery(1200);return;}scheduleAudioAhead(iOSish||document.hidden);mediaState(true);acquireWakeLock();});
+  audioResume().then(ok=>{if(!running||paused)return;if(!ok||audioIsBlocked()){markAudioInterrupted();scheduleAudioRecovery(1200);return;}scheduleAudioAhead(document.hidden);mediaState(true);acquireWakeLock();});
 }
 function handleAudioSessionState(){const s=audioSessionState();if(s==="interrupted")markAudioInterrupted();else if(audioInterrupted&&!paused&&!intentionalPause&&!audioResumeBusy)scheduleAudioRecovery(s==="active"?0:450);}
 function handleAudioContextState(){if(!actx)return;if(actx.state==="interrupted")markAudioInterrupted();else if(actx.state==="running"&&audioInterrupted&&!intentionalPause&&!audioResumeBusy)scheduleAudioRecovery(0);else if(actx.state==="suspended"&&running&&!paused&&!intentionalPause&&!audioResumeBusy){if(document.hidden&&iOSish)return;markAudioInterrupted();scheduleAudioRecovery(900);}}
@@ -466,23 +467,32 @@ function installInterruptionHandlers(){
     ["ended","abort","stalled","emptied","error"].forEach(t=>mediaSink.addEventListener(t,()=>{if(running&&!paused&&!intentionalPause&&!audioResumeBusy){markAudioInterrupted();scheduleAudioRecovery(1200);}}));
   }
   try{if(navigator.audioSession&&navigator.audioSession.addEventListener)navigator.audioSession.addEventListener("statechange",handleAudioSessionState);}catch(e){}
-  addEventListener("pagehide",()=>{if(running&&!paused)scheduleAudioAhead(true);});
+  addEventListener("pagehide",()=>{if(running&&!paused)prepareLockedAudio();});
   addEventListener("pageshow",()=>{if(running&&!paused){const now=sessionNow();advancePhase(now);updateSessionClock(now);mediaState(true);}if(audioInterrupted&&!paused&&!intentionalPause)scheduleAudioRecovery(0);});
   addEventListener("focus",()=>{if(audioInterrupted&&!paused&&!intentionalPause)scheduleAudioRecovery(0);});
   addEventListener("pointerdown",()=>{if(audioInterrupted&&!paused&&!intentionalPause)scheduleAudioRecovery(0);},{passive:true});
 }
 function connectDirectOutput(){if(actx&&master&&limiter&&!directOut){try{limiter.connect(actx.destination);directOut=true;}catch(e){}}}
-function keepAliveWav(){
-  if(_keepAliveWav)return _keepAliveWav;
-  const sr=22050,len=sr,bytes=44+len*2,buf=new ArrayBuffer(bytes),v=new DataView(buf);
+function sessionKeepAliveSeconds(){
+  if(running&&plannedEndMs!==Infinity)return Math.max(KEEPALIVE_SECONDS,Math.ceil((plannedEndMs-sessStart)/1000)+90);
+  if(typeof durMin==="number"&&isFinite(durMin))return Math.max(KEEPALIVE_SECONDS,Math.ceil(durMin*60)+90);
+  return KEEPALIVE_SECONDS;
+}
+function keepAliveWav(seconds){
+  const need=Math.max(KEEPALIVE_SECONDS,Math.ceil(seconds||KEEPALIVE_SECONDS));
+  if(_keepAliveWav&&_keepAliveWav.seconds>=need)return _keepAliveWav.url;
+  if(_keepAliveWav&&_keepAliveWav.url&&_keepAliveWav.url.startsWith("blob:")){try{URL.revokeObjectURL(_keepAliveWav.url);}catch(e){}}
+  const sr=8000,len=sr*need,bytes=44+len*2,buf=new ArrayBuffer(bytes),v=new DataView(buf);
   const w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i));};
   w(0,"RIFF");v.setUint32(4,bytes-8,true);w(8,"WAVEfmt ");v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,sr,true);v.setUint32(28,sr*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);w(36,"data");v.setUint32(40,len*2,true);
   for(let i=0;i<len;i++){const s=Math.sin(2*Math.PI*180*i/sr)*28;v.setInt16(44+i*2,s,true);}
+  if(window.Blob&&window.URL&&URL.createObjectURL){_keepAliveWav={seconds:need,url:URL.createObjectURL(new Blob([buf],{type:"audio/wav"}))};return _keepAliveWav.url;}
   let bin="";const u=new Uint8Array(buf);for(let i=0;i<u.length;i+=4096)bin+=String.fromCharCode.apply(null,u.subarray(i,i+4096));
-  _keepAliveWav="data:audio/wav;base64,"+btoa(bin);
-  return _keepAliveWav;
+  _keepAliveWav={seconds:need,url:"data:audio/wav;base64,"+btoa(bin)};
+  return _keepAliveWav.url;
 }
-function installWavSink(){if(!mediaSink||!actx)return false;try{mediaSink.srcObject=null;mediaSink.src=keepAliveWav();mediaSink.loop=true;mediaSink.volume=1;connectDirectOutput();return true;}catch(e){connectDirectOutput();return false;}}
+function installWavSink(){if(!mediaSink||!actx)return false;try{mediaSink.srcObject=null;mediaSink.src=keepAliveWav(sessionKeepAliveSeconds());mediaSink.loop=true;mediaSink.volume=1;connectDirectOutput();return true;}catch(e){connectDirectOutput();return false;}}
+function resetMediaSinkClock(){if(mediaSink){try{if(iOSish&&actx)installWavSink();mediaSink.currentTime=0;}catch(e){}}}
 function installMediaSink(){
   if(!mediaSink||!actx||!master||!limiter)return false;
   mediaSink.setAttribute("playsinline","");mediaSink.preload="auto";mediaSink.controls=false;mediaSink.muted=false;mediaSink.volume=1;
@@ -520,11 +530,12 @@ function trackSource(src){trackedSources.add(src);const ended=src.onended;src.on
 function stopTrackedAudio(){if(!actx)return;const t=actx.currentTime;trackedSources.forEach(src=>{try{src.stop(t+0.01);}catch(e){}});trackedSources.clear();audioScheduleUntil=0;}
 function noiseBuf(){if(_noise)return _noise;const len=Math.floor(actx.sampleRate*2);_noise=actx.createBuffer(1,len,actx.sampleRate);const d=_noise.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;return _noise;}
 function usesSeamlessWash(){return cat==="calm"||cat==="intimacy";}
+function useScheduledBreathCues(){return iOSish&&usesSeamlessWash();}
 function voiceAvailable(){return usesSeamlessWash();}
 function washColor(){const c=(AMBIENT[cat]&&AMBIENT[cat].washColor)||{};return {brightness:c.brightness==null?1:c.brightness,grain:c.grain==null?1:c.grain,tone:c.tone==null?1:c.tone};}
 function droneRoot(){return ((AMBIENT[cat]&&AMBIENT[cat].freq&&AMBIENT[cat].freq[0])||49);}
 function startBreathWash(){
-  if(!actx||breathWash||!usesSeamlessWash())return;
+  if(!actx||breathWash||!usesSeamlessWash()||useScheduledBreathCues())return;
   const cfg=AMBIENT[cat],color=washColor(),root=cfg.freq[0],tonic=root*4,src=actx.createBufferSource(),hp=actx.createBiquadFilter(),lp=actx.createBiquadFilter(),noiseGain=actx.createGain(),toneA=actx.createOscillator(),toneB=actx.createOscillator(),toneFilter=actx.createBiquadFilter(),toneGain=actx.createGain(),mix=actx.createGain();
   src.buffer=noiseBuf();src.loop=true;hp.type="highpass";hp.frequency.value=BREATH_WASH.hpOut;lp.type="lowpass";lp.Q.value=BREATH_WASH.qOut;lp.frequency.value=BREATH_WASH.base*color.brightness;noiseGain.gain.value=1;
   toneA.type="sine";toneB.type="sine";toneA.frequency.value=tonic;toneB.frequency.value=tonic;toneB.detune.value=BREATH_WASH.toneDetune;toneFilter.type="lowpass";toneFilter.Q.value=0.35;toneFilter.frequency.value=tonic*4;toneGain.gain.value=BREATH_WASH.toneGain*color.tone;mix.gain.value=0;
@@ -573,7 +584,7 @@ function updateBreathWash(fade){
 }
 function humF0(){return ambience==="drone"?147:(VOICE_F0[cat]||120);}
 function startHumVoice(){
-  if(!actx||humVoice||!voiceAvailable()||voiceChar==="off")return;
+  if(!actx||humVoice||!voiceAvailable()||voiceChar==="off"||useScheduledBreathCues())return;
   const f0=humF0(),oscA=actx.createOscillator(),oscB=actx.createOscillator(),sub=actx.createOscillator(),srcGain=actx.createGain(),subGain=actx.createGain(),bodyGain=actx.createGain(),lp=actx.createBiquadFilter(),humGain=actx.createGain(),vib=actx.createOscillator(),vibDepth=actx.createGain();
   oscA.type="sawtooth";oscB.type="sawtooth";sub.type="sine";oscA.frequency.value=f0;oscB.frequency.value=f0;sub.frequency.value=f0;oscA.detune.value=-6;oscB.detune.value=6;
   srcGain.gain.value=0;subGain.gain.value=0;bodyGain.gain.value=0.4;lp.type="lowpass";lp.frequency.value=1500;lp.Q.value=0.55;humGain.gain.value=0;
@@ -616,6 +627,20 @@ function updateHumVoice(){
   if(humEnv<0.001)humEnv=0;
   stage.style.setProperty("--voice",humEnv.toFixed(3));
 }
+function quietLiveBreathAudio(fade){
+  if(!actx)return;
+  const t=actx.currentTime,tc=fade==null?0.12:fade;
+  if(humVoice)humVoice.humGain.gain.setTargetAtTime(0.00001,t,tc);
+  if(breathWash)breathWash.mix.gain.setTargetAtTime(0.00001,t,tc);
+}
+function restoreLiveBreathAudio(){
+  startBreathWash();startHumVoice();updateBreathWash(0.05);updateHumVoice();
+}
+function prepareLockedAudio(){
+  quietLiveBreathAudio();
+  if(usesSeamlessWash()&&!useScheduledBreathCues())audioScheduleUntil=sessionNow();
+  scheduleAudioAhead(true);
+}
 /* ocean wash: kind 'in' = tide drawing back, kind 'out' = wave washing up then receding */
 function wash(dur,kind,when){if(!actx||!cueBus)return;const t=Math.max(actx.currentTime+0.015,when||actx.currentTime);
   const src=trackSource(actx.createBufferSource());src.buffer=noiseBuf();src.loop=true;
@@ -632,6 +657,22 @@ function wash(dur,kind,when){if(!actx||!cueBus)return;const t=Math.max(actx.curr
   }
   src.start(t);src.stop(t+dur+0.05);
 }
+function voiceCue(dur,when){
+  if(!actx||!cueBus||!voiceAvailable()||voiceChar==="off")return;
+  const spec=VOICE[voiceChar]||VOICE.mmm,t=Math.max(actx.currentTime+0.015,when||actx.currentTime),f0=humF0();
+  const oscA=trackSource(actx.createOscillator()),oscB=trackSource(actx.createOscillator()),sub=trackSource(actx.createOscillator()),srcGain=actx.createGain(),subGain=actx.createGain(),bodyGain=actx.createGain(),lp=actx.createBiquadFilter(),humGain=actx.createGain();
+  oscA.type="sawtooth";oscB.type="sawtooth";sub.type="sine";oscA.frequency.value=f0;oscB.frequency.value=f0;sub.frequency.value=f0;oscA.detune.value=-6;oscB.detune.value=6;
+  srcGain.gain.value=spec.saw;subGain.gain.value=spec.sub;bodyGain.gain.value=0.4;lp.type="lowpass";lp.frequency.value=spec.lp;lp.Q.value=0.55;humGain.gain.value=0;
+  oscA.connect(srcGain);oscB.connect(srcGain);sub.connect(subGain);subGain.connect(bodyGain).connect(lp);
+  spec.formants.forEach(f=>{const filter=actx.createBiquadFilter(),gain=actx.createGain();filter.type="bandpass";filter.frequency.value=f.f;filter.Q.value=f.q;gain.gain.value=f.g;srcGain.connect(filter);subGain.connect(filter);filter.connect(gain).connect(lp);});
+  lp.connect(humGain).connect(cueBus);
+  const level=VOICE_LEVELS[voiceLevelKey]||VOICE_LEVELS.med,on=Math.min(0.8,Math.max(0.08,dur*0.12)),off=Math.min(1.2,Math.max(0.18,dur*0.22));
+  humGain.gain.setValueAtTime(0.00001,t);
+  humGain.gain.linearRampToValueAtTime(level,t+on);
+  humGain.gain.setValueAtTime(level,Math.max(t+on,t+dur-off));
+  humGain.gain.linearRampToValueAtTime(0.00001,t+dur);
+  oscA.start(t);oscB.start(t);sub.start(t);oscA.stop(t+dur+0.08);oscB.stop(t+dur+0.08);sub.stop(t+dur+0.08);
+}
 /* warm fixed-pitch marker for each hold beat: same tone every count (no rising contour), sub-octave body, rolled-off top */
 function marimba(when,idx){if(!actx)return;const f=droneRoot()*4;
   const o=trackSource(actx.createOscillator()),sub=trackSource(actx.createOscillator()),g=actx.createGain(),sg=actx.createGain(),lp=actx.createBiquadFilter();
@@ -641,8 +682,14 @@ function marimba(when,idx){if(!actx)return;const f=droneRoot()*4;
   o.connect(g);sub.connect(sg).connect(g);g.connect(lp).connect(cueBus);o.start(when);sub.start(when);o.stop(when+0.75);sub.stop(when+0.75);}
 function holdCue(dur,when){if(!actx)return;const n=Math.min(12,Math.floor(dur));for(let s=0;s<n;s++)marimba((when||actx.currentTime)+s+0.02,s);}
 function bowl(when){if(!actx||!cueBus)return;const t=Math.max(actx.currentTime+0.015,when||actx.currentTime),root=droneRoot(),o=trackSource(actx.createOscillator()),o2=trackSource(actx.createOscillator()),g=actx.createGain(),g2=actx.createGain();o.type="sine";o.frequency.value=root*2;o2.type="sine";o2.frequency.value=root*3;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(0.095,t+0.035);g.gain.exponentialRampToValueAtTime(0.0008,t+3.2);g2.gain.value=0.28;o.connect(g).connect(cueBus);o2.connect(g2).connect(g);o.start(t);o2.start(t);o.stop(t+3.4);o2.stop(t+3.4);}
-function playPhaseCue(type,dur,when,idx){
-  if(usesSeamlessWash()){if(type==="rest")bowl(when);else if(type==="holdF"||type==="holdE")holdCue(dur,when);return;}
+function playPhaseCue(type,dur,when,idx,lockMode){
+  if(usesSeamlessWash()){
+    if(lockMode&&(type==="in"||type==="inA"||type==="sip"))wash(dur,"in",when);
+    else if(lockMode&&type==="out"){wash(dur,"out",when);voiceCue(dur,when);}
+    else if(type==="rest")bowl(when);
+    else if(type==="holdF"||type==="holdE")holdCue(dur,when);
+    return;
+  }
   if(pat.padAudio){if(type==="rest"||idx===0)bowl(when);return;}
   if(type==="in")wash(dur,"in",when);else if(type==="out")wash(dur,"out",when);else if(type==="rest")bowl(when);else if(type==="holdF"||type==="holdE")holdCue(dur,when);
 }
@@ -755,7 +802,7 @@ function cuePhase(type){
 }
 function setHint(type){const bits=[];if(pat.rounds)bits.push("Round "+roundCount);if(type==="rest")bits.push("rest and notice");else if(pat.id==="tummo")bits.push(type==="holdF"?"draw the belly in · warmth at your center":type==="in"?"full breath":"soft release");if(pat.cues&&pat.cues[type]&&pat.cues[type].length){const arr=pat.cues[type];const i=(((roundCount-1)%arr.length)+arr.length)%arr.length;bits.push(arr[i]);}if(type==="out"&&voiceAvailable()&&voiceChar!=="off")bits.push(pat.id==="together"?"hum the exhale together":"hum softly on the exhale");$("hint").textContent=bits.join(" · ");}
 function showPhase(type,doVibe){$("word").textContent=WORDS[type]||" ";setHint(type);if(doVibe)cuePhase(type);}
-function enterPhase(i,startAt,doVibe){pIdx=i;pStart=startAt||sessionNow();const[type]=phases[i];showPhase(type,doVibe!==false);scheduleAudioAhead();}
+function enterPhase(i,startAt,doVibe){pIdx=i;pStart=startAt||sessionNow();const[type]=phases[i];showPhase(type,doVibe!==false);scheduleAudioAhead(document.hidden);}
 function advancePhase(now){
   if(landing||!running||paused||!phases.length)return;
   let changed=false;
@@ -766,7 +813,7 @@ function advancePhase(now){
       roundCount++;
     }
   }
-  if(changed){const[type]=phases[pIdx];showPhase(type,!document.hidden);scheduleAudioAhead();}
+  if(changed){const[type]=phases[pIdx];showPhase(type,!document.hidden);scheduleAudioAhead(document.hidden);}
 }
 function updateSessionClock(now){
   if(landing||!running||paused)return;
@@ -779,11 +826,12 @@ function scheduleAudioAhead(lockAhead){
   const nowPerf=sessionNow(),endPerf=(durMin==="inf")?Infinity:plannedEndMs;
   let idx=pIdx,start=pStart,cyc=roundCount,target=Math.max(audioScheduleUntil||nowPerf,nowPerf-30);
   while(start+phaseDur(idx,cyc)*1000<=target){start+=phaseDur(idx,cyc)*1000;idx=(idx+1)%phases.length;if(idx===0)cyc++;}
-  const horizonMs=lockAhead?LOCK_AUDIO_SCHEDULE_AHEAD:AUDIO_SCHEDULE_AHEAD;
+  const scheduledMode=lockAhead||useScheduledBreathCues();
+  const horizonMs=scheduledMode?LOCK_AUDIO_SCHEDULE_AHEAD:AUDIO_SCHEDULE_AHEAD;
   const horizon=Math.min(nowPerf+horizonMs,endPerf);
   while(start<horizon){
     const type=phases[idx][0],dur=phaseDur(idx,cyc),when=actx.currentTime+Math.max(0.02,(start-nowPerf)/1000);
-    playPhaseCue(type,dur,when,idx);start+=dur*1000;idx=(idx+1)%phases.length;if(idx===0)cyc++;
+    playPhaseCue(type,dur,when,idx,scheduledMode);start+=dur*1000;idx=(idx+1)%phases.length;if(idx===0)cyc++;
   }
   audioScheduleUntil=start;
 }
@@ -824,11 +872,10 @@ function start(){
   const now=performance.now();
   resetSessionClock(now);
   clearLanding();intentionalPause=false;clearAudioInterruption();
-  qWarm=0;qFrames=0;qAccum=0;qDone=false;
   running=true;paused=false;pendingFinish=false;roundCount=1;sessStart=now;sessionDescent=(paceMode==="descent"&&cat==="calm"&&!pat.rounds);planSession(now);audioScheduleUntil=now;
   syncRunningOrbOffset();stage.classList.add("running");stage.classList.remove("dim");$("pauseBtn").textContent="❚❚";requestAnimationFrame(syncRunningOrbOffset);
   syncResetControl();
-  audioResume().then(ok=>{if(ok)scheduleAudioAhead(iOSish);else{markAudioInterrupted();scheduleAudioRecovery(1200);}});startSelectedAmbience();startBreathWash();startHumVoice();setMaster();setCueBus();updateAmbientBed(0.05);updateActiveBed(0.05);updateBreathWash(0.05);updateHumVoice();enterPhase(0,now,true);mediaMeta();mediaState(true);acquireWakeLock();
+  resetMediaSinkClock();audioResume().then(ok=>{if(ok)scheduleAudioAhead(document.hidden);else{markAudioInterrupted();scheduleAudioRecovery(1200);}});startSelectedAmbience();startBreathWash();startHumVoice();setMaster();setCueBus();updateAmbientBed(0.05);updateActiveBed(0.05);updateBreathWash(0.05);updateHumVoice();enterPhase(0,now,true);mediaMeta();mediaState(true);acquireWakeLock();
 }
 function togglePause(){
   if(!running)return;
@@ -841,7 +888,7 @@ function togglePause(){
     const now=sessionNow(),g=now-pauseAt;
     shiftSessionBy(g);clearAudioInterruption();stopTrackedAudio();audioScheduleUntil=now;paused=false;intentionalPause=true;
     $("pauseBtn").textContent="❚❚";if(phases[pIdx])showPhase(phases[pIdx][0],false);setMaster();setCueBus();startSelectedAmbience();startBreathWash();startHumVoice();updateAmbientBed(0.05);updateActiveBed(0.05);updateBreathWash(0.05);updateHumVoice();mediaState(true);
-    audioResume().then(ok=>{intentionalPause=false;if(!running||paused)return;if(ok&&!audioIsBlocked())scheduleAudioAhead(iOSish);else{markAudioInterrupted();scheduleAudioRecovery(1200);}}).catch(()=>{intentionalPause=false;markAudioInterrupted();scheduleAudioRecovery(1200);});
+    resetMediaSinkClock();audioResume().then(ok=>{intentionalPause=false;if(!running||paused)return;if(ok&&!audioIsBlocked())scheduleAudioAhead(document.hidden);else{markAudioInterrupted();scheduleAudioRecovery(1200);}}).catch(()=>{intentionalPause=false;markAudioInterrupted();scheduleAudioRecovery(1200);});
     acquireWakeLock();
   }
 }
@@ -864,26 +911,14 @@ function computeOpen(now){
   }else if(paused||audioInterrupted){return breathOpen;}
   else{return breathOpen+(0.7-breathOpen)*0.05;}
 }
-let rafId=0,lastMedia=0,lastIdleDraw=0;
-let qWarm=0,qFrames=0,qAccum=0,qDone=false;
-function sampleQuality(dt){
-  if(qDone||!running||visualMode!=="full"||dt<=0||dt>200)return;
-  if(qWarm++<60)return;
-  qAccum+=dt;qFrames++;
-  if(qFrames<120)return;
-  const avg=qAccum/qFrames;qDone=true;
-  /* below ~38fps sustained: drop to Minimal for this session only, never overwrite the stored preference */
-  if(avg>1000/38){visualMode="minimal";stage.dataset.visual="minimal";buildVisuals();}
-}
+let rafId=0,lastMedia=0;
 function frame(now){
   const clock=running?sessionNow():now;
   if(!lastNow)lastNow=clock;
-  const _dt=clock-lastNow;
-  breathOpen=computeOpen(clock);lastNow=clock;sampleQuality(_dt);
+  breathOpen=computeOpen(clock);lastNow=clock;
   prevDir=breathOpen-prevOpen;
   orb.style.transform="scale("+breathOpen.toFixed(4)+")";
-  if(running){Mandala.draw(now/1000,breathOpen);lastIdleDraw=now;}
-  else if(now-lastIdleDraw>1200){Mandala.draw(now/1000,breathOpen);lastIdleDraw=now;}
+  if(visualMode==="full")Mandala.draw(now/1000,breathOpen);
   updateBreathPad();
   updateBreathWash();
   updateHumVoice();
@@ -894,7 +929,7 @@ function frame(now){
 function startBackgroundTicker(){if(bgTimer)return;bgTimer=setInterval(()=>{const now=sessionNow();advancePhase(now);updateSessionClock(now);scheduleAudioAhead(true);if(running&&now-lastMedia>1000){lastMedia=now;mediaState();}},1000);}
 function stopBackgroundTicker(){if(bgTimer){clearInterval(bgTimer);bgTimer=0;}}
 /* stop rendering when backgrounded/locked to save battery; resume cleanly */
-document.addEventListener("visibilitychange",()=>{if(document.hidden){if(humVoice&&actx){humVoice.humGain.gain.setTargetAtTime(0.00001,actx.currentTime,0.12);}scheduleAudioAhead(true);mediaState(true);cancelAnimationFrame(rafId);startBackgroundTicker();releaseWakeLock();}else{stopBackgroundTicker();lastNow=0;setAudioSessionPlayback();if(running&&!paused){const now=sessionNow();advancePhase(now);updateSessionClock(now);if(audioInterrupted)scheduleAudioRecovery(0);else audioResume().then(ok=>{if(ok)scheduleAudioAhead(iOSish);else{markAudioInterrupted();scheduleAudioRecovery(1200);}});acquireWakeLock();mediaState(true);}cancelAnimationFrame(rafId);rafId=requestAnimationFrame(frame);}});
+document.addEventListener("visibilitychange",()=>{if(document.hidden){prepareLockedAudio();mediaState(true);cancelAnimationFrame(rafId);startBackgroundTicker();releaseWakeLock();}else{stopBackgroundTicker();lastNow=0;setAudioSessionPlayback();if(running&&!paused){const now=sessionNow();advancePhase(now);updateSessionClock(now);restoreLiveBreathAudio();if(audioInterrupted)scheduleAudioRecovery(0);else audioResume().then(ok=>{if(ok)scheduleAudioAhead(false);else{markAudioInterrupted();scheduleAudioRecovery(1200);}});acquireWakeLock();mediaState(true);}cancelAnimationFrame(rafId);rafId=requestAnimationFrame(frame);}});
 
 /* ---------- sacred-geometry mandalas (breath-driven, subtle) ---------- */
 const Mandala=(()=>{
@@ -969,7 +1004,7 @@ $("begin").onclick=requestStart;
 $("gateGo").onclick=()=>{if(activeGateMode==="together")introOK=true;else if(activeGateMode!=="holotropicAlways")safetyOK=true;$("gate").classList.remove("on");start();activeGateMode=null;};
 $("gateBack").onclick=()=>{$("gate").classList.remove("on");activeGateMode=null;};
 $("pauseBtn").onclick=togglePause;$("endBtn").onclick=end;
-$("soundTg").onclick=()=>{soundOn=!soundOn;writeStore(STORE.sound,String(soundOn));$("soundTg").setAttribute("aria-pressed",soundOn);if(audioInterrupted)scheduleAudioRecovery(0);else audioResume();setCueBus();updateAmbientBed();updateActiveBed();updateBreathWash();updateHumVoice();if(soundOn){audioScheduleUntil=sessionNow();scheduleAudioAhead(iOSish||document.hidden);}else stopTrackedAudio();};
+$("soundTg").onclick=()=>{soundOn=!soundOn;writeStore(STORE.sound,String(soundOn));$("soundTg").setAttribute("aria-pressed",soundOn);if(audioInterrupted)scheduleAudioRecovery(0);else audioResume();setCueBus();updateAmbientBed();updateActiveBed();updateBreathWash();updateHumVoice();if(soundOn){audioScheduleUntil=sessionNow();scheduleAudioAhead(document.hidden);}else stopTrackedAudio();};
 function startQuickReset(){if(running)return;const resetPat=CATS.calm.patterns.find(p=>p.id==="extendedexhale");if(!resetPat)return;quickResetState={cat,pat,durMin};wasQuickReset=true;cat="calm";pat=resetPat;durMin=1.5;paintCat();setPname();start();$("hint").textContent="ribs down, let the belly go soft";}
 $("resetTg").onclick=startQuickReset;
 function openSettings(){buildAmbient();buildVoice();buildVoiceLevel();buildPace();$("settingsSheet").classList.add("on");$("settingsSheet").setAttribute("aria-hidden","false");}
