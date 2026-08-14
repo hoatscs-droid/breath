@@ -2,7 +2,7 @@
 
 Notable changes to Breath, newest first.
 
-## v1.0.0 - <DATE: Corbin to confirm>
+## v1.0.0 - August 14, 2026
 
 Initial public release.
 
