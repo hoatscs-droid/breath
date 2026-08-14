@@ -10,15 +10,11 @@ Breath paces you through slow and activating breathing practices with a single b
 
 <table>
   <tr>
-    <td width="50%"><img src="screenshots/01-calm.jpg" alt="Calm tab with the Coherent breathing preset selected" width="280"><br><em>Calm: steady breathing with a soft visual field.</em></td>
-    <td width="50%"><img src="screenshots/02-intimacy.jpg" alt="Intimacy tab with Together selected and Grounding centered below" width="280"><br><em>Intimacy: shared rhythms and grounded connection.</em></td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="screenshots/03-energy.jpg" alt="Energy tab with Breath Of Fire selected" width="280"><br><em>Energy: brief activating practices with safety context.</em></td>
-    <td width="50%"><img src="screenshots/04-holotropic.jpg" alt="Holotropic tab with Connected selected" width="280"><br><em>Holotropic: gated fast-breathing presets.</em></td>
-  </tr>
-  <tr>
-    <td colspan="2" align="center"><img src="screenshots/05-running-orb.jpg" alt="Running breath session showing the orb on breathe out" width="280"><br><em>Running mode: the breathing orb leads the session.</em></td>
+    <td width="20%" align="center" valign="top"><img src="screenshots/01-calm.jpg" alt="Calm tab with the Coherent breathing preset selected" width="140"><br><sub><strong>Calm</strong><br>Steady, settling breath.</sub></td>
+    <td width="20%" align="center" valign="top"><img src="screenshots/02-intimacy.jpg" alt="Intimacy tab with Together selected and Grounding centered below" width="140"><br><sub><strong>Intimacy</strong><br>Shared rhythms.</sub></td>
+    <td width="20%" align="center" valign="top"><img src="screenshots/03-energy.jpg" alt="Energy tab with Breath Of Fire selected" width="140"><br><sub><strong>Energy</strong><br>Brief activating practices.</sub></td>
+    <td width="20%" align="center" valign="top"><img src="screenshots/04-holotropic.jpg" alt="Holotropic tab with Connected selected" width="140"><br><sub><strong>Holotropic</strong><br>Gated fast-breathing presets.</sub></td>
+    <td width="20%" align="center" valign="top"><img src="screenshots/05-running-orb.jpg" alt="Running breath session showing the orb on breathe out" width="140"><br><sub><strong>Running</strong><br>The orb leads the session.</sub></td>
   </tr>
 </table>
 
