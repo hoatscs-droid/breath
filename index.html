@@ -530,12 +530,11 @@ function trackSource(src){trackedSources.add(src);const ended=src.onended;src.on
 function stopTrackedAudio(){if(!actx)return;const t=actx.currentTime;trackedSources.forEach(src=>{try{src.stop(t+0.01);}catch(e){}});trackedSources.clear();audioScheduleUntil=0;}
 function noiseBuf(){if(_noise)return _noise;const len=Math.floor(actx.sampleRate*2);_noise=actx.createBuffer(1,len,actx.sampleRate);const d=_noise.getChannelData(0);for(let i=0;i<len;i++)d[i]=Math.random()*2-1;return _noise;}
 function usesSeamlessWash(){return cat==="calm"||cat==="intimacy";}
-function useScheduledBreathCues(){return iOSish&&usesSeamlessWash();}
 function voiceAvailable(){return usesSeamlessWash();}
 function washColor(){const c=(AMBIENT[cat]&&AMBIENT[cat].washColor)||{};return {brightness:c.brightness==null?1:c.brightness,grain:c.grain==null?1:c.grain,tone:c.tone==null?1:c.tone};}
 function droneRoot(){return ((AMBIENT[cat]&&AMBIENT[cat].freq&&AMBIENT[cat].freq[0])||49);}
 function startBreathWash(){
-  if(!actx||breathWash||!usesSeamlessWash()||useScheduledBreathCues())return;
+  if(!actx||breathWash||!usesSeamlessWash())return;
   const cfg=AMBIENT[cat],color=washColor(),root=cfg.freq[0],tonic=root*4,src=actx.createBufferSource(),hp=actx.createBiquadFilter(),lp=actx.createBiquadFilter(),noiseGain=actx.createGain(),toneA=actx.createOscillator(),toneB=actx.createOscillator(),toneFilter=actx.createBiquadFilter(),toneGain=actx.createGain(),mix=actx.createGain();
   src.buffer=noiseBuf();src.loop=true;hp.type="highpass";hp.frequency.value=BREATH_WASH.hpOut;lp.type="lowpass";lp.Q.value=BREATH_WASH.qOut;lp.frequency.value=BREATH_WASH.base*color.brightness;noiseGain.gain.value=1;
   toneA.type="sine";toneB.type="sine";toneA.frequency.value=tonic;toneB.frequency.value=tonic;toneB.detune.value=BREATH_WASH.toneDetune;toneFilter.type="lowpass";toneFilter.Q.value=0.35;toneFilter.frequency.value=tonic*4;toneGain.gain.value=BREATH_WASH.toneGain*color.tone;mix.gain.value=0;
@@ -571,8 +570,8 @@ function updateBreathWash(fade){
   const targetCutoff=((BREATH_WASH.base+BREATH_WASH.span*norm)*color.brightness+(rising?BREATH_WASH.inhaleLift:0)-(falling?BREATH_WASH.exhaleDip*(0.45+0.55*(1-norm)):0))*(isHold?TIERB.hushCut:1);
   const targetHighpass=rising?BREATH_WASH.hpIn:(falling?BREATH_WASH.hpOut:115);
   const targetQ=rising?BREATH_WASH.qIn:(falling?BREATH_WASH.qOut:0.45);
-  /* During iOS lock, requestAnimationFrame pauses, so this continuous wash holds
-     its last calm level instead of phase-pulsing; the hidden audio keeps it alive. */
+  /* Keep visible sessions on the continuous wash; hidden/locked sessions use
+     scheduled phase cues because requestAnimationFrame pauses on iOS. */
   breathWash.filter.frequency.setTargetAtTime(targetCutoff,t,BREATH_WASH.filterPortamento);
   breathWash.filter.Q.setTargetAtTime(targetQ,t,BREATH_WASH.filterPortamento);
   breathWash.hp.frequency.setTargetAtTime(targetHighpass,t,BREATH_WASH.filterPortamento);
@@ -584,7 +583,7 @@ function updateBreathWash(fade){
 }
 function humF0(){return ambience==="drone"?147:(VOICE_F0[cat]||120);}
 function startHumVoice(){
-  if(!actx||humVoice||!voiceAvailable()||voiceChar==="off"||useScheduledBreathCues())return;
+  if(!actx||humVoice||!voiceAvailable()||voiceChar==="off")return;
   const f0=humF0(),oscA=actx.createOscillator(),oscB=actx.createOscillator(),sub=actx.createOscillator(),srcGain=actx.createGain(),subGain=actx.createGain(),bodyGain=actx.createGain(),lp=actx.createBiquadFilter(),humGain=actx.createGain(),vib=actx.createOscillator(),vibDepth=actx.createGain();
   oscA.type="sawtooth";oscB.type="sawtooth";sub.type="sine";oscA.frequency.value=f0;oscB.frequency.value=f0;sub.frequency.value=f0;oscA.detune.value=-6;oscB.detune.value=6;
   srcGain.gain.value=0;subGain.gain.value=0;bodyGain.gain.value=0.4;lp.type="lowpass";lp.frequency.value=1500;lp.Q.value=0.55;humGain.gain.value=0;
@@ -638,7 +637,7 @@ function restoreLiveBreathAudio(){
 }
 function prepareLockedAudio(){
   quietLiveBreathAudio();
-  if(usesSeamlessWash()&&!useScheduledBreathCues())audioScheduleUntil=sessionNow();
+  if(usesSeamlessWash())audioScheduleUntil=sessionNow();
   scheduleAudioAhead(true);
 }
 /* ocean wash: kind 'in' = tide drawing back, kind 'out' = wave washing up then receding */
@@ -826,7 +825,7 @@ function scheduleAudioAhead(lockAhead){
   const nowPerf=sessionNow(),endPerf=(durMin==="inf")?Infinity:plannedEndMs;
   let idx=pIdx,start=pStart,cyc=roundCount,target=Math.max(audioScheduleUntil||nowPerf,nowPerf-30);
   while(start+phaseDur(idx,cyc)*1000<=target){start+=phaseDur(idx,cyc)*1000;idx=(idx+1)%phases.length;if(idx===0)cyc++;}
-  const scheduledMode=lockAhead||useScheduledBreathCues();
+  const scheduledMode=!!lockAhead;
   const horizonMs=scheduledMode?LOCK_AUDIO_SCHEDULE_AHEAD:AUDIO_SCHEDULE_AHEAD;
   const horizon=Math.min(nowPerf+horizonMs,endPerf);
   while(start<horizon){
@@ -929,7 +928,7 @@ function frame(now){
 function startBackgroundTicker(){if(bgTimer)return;bgTimer=setInterval(()=>{const now=sessionNow();advancePhase(now);updateSessionClock(now);scheduleAudioAhead(true);if(running&&now-lastMedia>1000){lastMedia=now;mediaState();}},1000);}
 function stopBackgroundTicker(){if(bgTimer){clearInterval(bgTimer);bgTimer=0;}}
 /* stop rendering when backgrounded/locked to save battery; resume cleanly */
-document.addEventListener("visibilitychange",()=>{if(document.hidden){prepareLockedAudio();mediaState(true);cancelAnimationFrame(rafId);startBackgroundTicker();releaseWakeLock();}else{stopBackgroundTicker();lastNow=0;setAudioSessionPlayback();if(running&&!paused){const now=sessionNow();advancePhase(now);updateSessionClock(now);restoreLiveBreathAudio();if(audioInterrupted)scheduleAudioRecovery(0);else audioResume().then(ok=>{if(ok)scheduleAudioAhead(false);else{markAudioInterrupted();scheduleAudioRecovery(1200);}});acquireWakeLock();mediaState(true);}cancelAnimationFrame(rafId);rafId=requestAnimationFrame(frame);}});
+document.addEventListener("visibilitychange",()=>{if(document.hidden){prepareLockedAudio();mediaState(true);cancelAnimationFrame(rafId);startBackgroundTicker();releaseWakeLock();}else{stopBackgroundTicker();lastNow=0;setAudioSessionPlayback();if(running&&!paused){const now=sessionNow();advancePhase(now);updateSessionClock(now);stopTrackedAudio();audioScheduleUntil=now;restoreLiveBreathAudio();if(audioInterrupted)scheduleAudioRecovery(0);else audioResume().then(ok=>{if(ok)scheduleAudioAhead(false);else{markAudioInterrupted();scheduleAudioRecovery(1200);}});acquireWakeLock();mediaState(true);}cancelAnimationFrame(rafId);rafId=requestAnimationFrame(frame);}});
 
 /* ---------- sacred-geometry mandalas (breath-driven, subtle) ---------- */
 const Mandala=(()=>{
@@ -1019,6 +1018,7 @@ stage.addEventListener("click",e=>{if(landing&&e.target!==$("endBtn"))end();});
 
 $("soundTg").setAttribute("aria-pressed",soundOn);
 resize();paintCat();buildTabs();buildChips();buildDur();buildAmbient();buildVisuals();buildVoice();buildVoiceLevel();buildPace();setPname();$("hint").textContent="tap to begin";syncResetControl();installInterruptionHandlers();mediaSetup();mediaState(true);rafId=requestAnimationFrame(frame);
+if("serviceWorker" in navigator && (location.protocol==="https:"||location.hostname==="localhost")){addEventListener("load",()=>{navigator.serviceWorker.register("./sw.js").catch(()=>{});});}
 </script>
 </body>
 </html>

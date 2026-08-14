@@ -6,6 +6,22 @@ A breathing pacer that runs entirely in your browser. One file, no account, no t
 
 Breath paces you through slow and activating breathing practices with a single breathing orb, synthesized sound, and procedural visuals. Everything happens on your device. Nothing you do in the app ever leaves it.
 
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="screenshots/01-calm.jpg" alt="Calm tab with the Coherent breathing preset selected" width="280"><br><em>Calm: steady breathing with a soft visual field.</em></td>
+    <td width="50%"><img src="screenshots/02-intimacy.jpg" alt="Intimacy tab with Together selected and Grounding centered below" width="280"><br><em>Intimacy: shared rhythms and grounded connection.</em></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="screenshots/03-energy.jpg" alt="Energy tab with Breath Of Fire selected" width="280"><br><em>Energy: brief activating practices with safety context.</em></td>
+    <td width="50%"><img src="screenshots/04-holotropic.jpg" alt="Holotropic tab with Connected selected" width="280"><br><em>Holotropic: gated fast-breathing presets.</em></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><img src="screenshots/05-running-orb.jpg" alt="Running breath session showing the orb on breathe out" width="280"><br><em>Running mode: the breathing orb leads the session.</em></td>
+  </tr>
+</table>
+
 ## The practices
 
 Four spaces, each with its own character and its own honesty note shown in the app:
